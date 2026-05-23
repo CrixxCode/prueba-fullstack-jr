@@ -148,10 +148,7 @@ Objetivo de prueba:
 - `admin@demo.com / Admin123!`
 - `user@demo.com / User123!`
 
-Flujo recomendado en base nueva:
-1. Registrar `admin@demo.com` (el primer usuario queda con rol `admin`).
-2. Iniciar sesion como admin.
-3. Crear `user@demo.com` con rol `user` desde el CRUD.
+En `Development`, el backend ejecuta un seeder al iniciar y garantiza que ambas cuentas existan (si faltan, las crea; si existen, las corrige al estado demo esperado).
 
 ## Endpoints principales
 

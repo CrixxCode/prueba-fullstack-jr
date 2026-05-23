@@ -7,6 +7,10 @@
 # Backend build
 /backend/bin/
 /backend/obj/
+/backend/.test-output/
+/backend/backend.Tests/bin/
+/backend/backend.Tests/obj/
+/backend/backend.Tests/.test-output/
 
 # Frontend build
 /frontend/dist/

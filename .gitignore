@@ -1,0 +1,20 @@
+# Secrets
+/.env
+/backend/.env
+/frontend/.env
+/frontend/.env.local
+
+# Backend build
+/backend/bin/
+/backend/obj/
+
+# Frontend build
+/frontend/dist/
+/frontend/node_modules/
+/frontend/.angular/cache/
+
+# Local temp folders
+/.npm-cache/
+/.tmp-pdf/
+
+frontend-history.bundle

@@ -1,0 +1,158 @@
+﻿@backend_HostAddress = http://localhost:5241
+# @backend_HostAddress = https://localhost:7150
+
+@adminEmail = admin@demo.com
+@adminPassword = Admin123!
+@adminName = Admin User
+
+@newUserEmail = user1@example.com
+@newUserPassword = P4ssword123!
+@newUserName = User One
+
+# Pega el JWT del login admin (sin comillas)
+@adminToken = PASTE_ADMIN_JWT_HERE
+@adminRefreshToken = PASTE_ADMIN_REFRESH_TOKEN_HERE
+
+# Pega el id del usuario creado (GUID)
+@createdUserId = 00000000-0000-0000-0000-000000000000
+
+# Pega el JWT del login del usuario creado (sin comillas)
+@userToken = PASTE_USER_JWT_HERE
+@userRefreshToken = PASTE_USER_REFRESH_TOKEN_HERE
+
+### 1) Register first admin (solo la primera vez)
+POST {{backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}",
+  "name": "{{adminName}}"
+}
+
+### 2) Login admin (copiar accessToken y refreshToken)
+POST {{backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### 2.1) Refresh admin token
+POST {{backend_HostAddress}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{adminRefreshToken}}"
+}
+
+### 3) List users (admin only)
+GET {{backend_HostAddress}}/api/users
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 4) List users with filters (admin only)
+GET {{backend_HostAddress}}/api/users?search=user&page=1&size=10
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 4.1) List users sorted (admin only)
+GET {{backend_HostAddress}}/api/users?page=1&size=10&sortBy=email&sortDir=asc
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 5) Create user (admin only) (copiar id en @createdUserId)
+POST {{backend_HostAddress}}/api/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "email": "{{newUserEmail}}",
+  "password": "{{newUserPassword}}",
+  "name": "{{newUserName}}",
+  "role": "user",
+  "isActive": true
+}
+
+### 6) Get user by id (admin or same user)
+GET {{backend_HostAddress}}/api/users/{{createdUserId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 7) Update user by id (admin only for role/isActive)
+PUT {{backend_HostAddress}}/api/users/{{createdUserId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "User One Updated",
+  "password": "P4ssword1234!",
+  "role": "user",
+  "isActive": true
+}
+
+### 8) Login created user (copiar accessToken y refreshToken)
+POST {{backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{newUserEmail}}",
+  "password": "P4ssword1234!"
+}
+
+### 8.1) Refresh created user token
+POST {{backend_HostAddress}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{userRefreshToken}}"
+}
+
+### 9) Created user reads own profile
+GET {{backend_HostAddress}}/api/users/{{createdUserId}}
+Authorization: Bearer {{userToken}}
+Accept: application/json
+
+### 10) Negative test: created user cannot list all users (should be 403)
+GET {{backend_HostAddress}}/api/users
+Authorization: Bearer {{userToken}}
+Accept: application/json
+
+### 11) Negative test: bad login (should be 401)
+POST {{backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{newUserEmail}}",
+  "password": "wrong-password"
+}
+
+### 12) Delete user (admin only)
+DELETE {{backend_HostAddress}}/api/users/{{createdUserId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 13) Logout admin session
+POST {{backend_HostAddress}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{adminRefreshToken}}"
+}
+
+### 14) Auth audit logs (admin only)
+GET {{backend_HostAddress}}/api/audit/auth?page=1&size=20
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 15) Auth audit logs filtered
+GET {{backend_HostAddress}}/api/audit/auth?eventType=login_failed&isSuccess=false&email={{newUserEmail}}&page=1&size=10
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### 16) Auth audit logs sorted
+GET {{backend_HostAddress}}/api/audit/auth?page=1&size=20&sortBy=eventType&sortDir=asc
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+

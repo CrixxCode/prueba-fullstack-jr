@@ -1,0 +1,289 @@
+<div
+  class="space-y-6"
+  [attr.aria-busy]="loading || detailLoading || deleting ? 'true' : 'false'"
+>
+  <section class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-900">
+        Usuarios
+      </h1>
+      <p class="mt-1 text-sm text-slate-600">
+        Selecciona un usuario para ver su informacion.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      (click)="goToCreate()"
+      class="h-11 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+    >
+      Crear usuario
+    </button>
+  </section>
+
+  <div
+    *ngIf="toastVisible"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    class="fixed right-6 top-6 z-[80] w-[360px] max-w-[calc(100vw-3rem)] rounded-xl border px-4 py-3 shadow-2xl"
+    [ngClass]="toastType === 'deleted' ? 'border-red-300 bg-red-50/95' : 'border-emerald-300 bg-emerald-50/95'"
+  >
+    <div class="flex items-start gap-3">
+      <span
+        class="mt-1 inline-block h-2.5 w-2.5 rounded-full"
+        [ngClass]="toastType === 'deleted' ? 'bg-red-600' : 'bg-emerald-600'"
+      ></span>
+
+      <p
+        class="flex-1 text-sm font-semibold"
+        [ngClass]="toastType === 'deleted' ? 'text-red-800' : 'text-emerald-800'"
+      >
+        {{ toastMessage }}
+      </p>
+
+      <button
+        type="button"
+        (click)="dismissToast()"
+        aria-label="Cerrar notificacion"
+        class="rounded-md px-2 py-0.5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+        [ngClass]="toastType === 'deleted' ? 'text-red-700 hover:bg-red-100' : 'text-emerald-700 hover:bg-emerald-100'"
+      >
+        X
+      </button>
+    </div>
+  </div>
+
+  <section class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+    <article class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="space-y-3 border-b border-slate-200 p-4">
+        <label for="user-search" class="text-sm font-medium text-slate-700">
+          Buscar usuario
+        </label>
+
+        <div class="flex flex-col gap-2 py-2 sm:flex-row">
+          <input
+            id="user-search"
+            type="text"
+            [(ngModel)]="search"
+            (ngModelChange)="onSearchChange()"
+            placeholder="Nombre o correo"
+            class="h-10 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+
+          <button
+            type="button"
+            (click)="searchUsers()"
+            class="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2"
+          >
+            Buscar
+          </button>
+        </div>
+
+        <button
+          type="button"
+          (click)="clearSearch()"
+          class="h-9 rounded-lg px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+        >
+          Limpiar
+        </button>
+      </div>
+
+      <div
+        *ngIf="errorMessage"
+        role="alert"
+        aria-live="assertive"
+        class="m-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+      >
+        {{ errorMessage }}
+      </div>
+
+      <div *ngIf="loading" role="status" aria-live="polite" class="p-6 text-sm text-slate-600">
+        Cargando usuarios...
+      </div>
+
+      <ul *ngIf="!loading" aria-label="Lista de usuarios" class="max-h-[600px] divide-y divide-slate-100 overflow-y-auto">
+        <li *ngFor="let user of users; trackBy: trackByUserId">
+          <button
+            type="button"
+            (click)="selectUser(user)"
+            [attr.aria-pressed]="selectedUserId === user.id"
+            [ngClass]="selectedUserId === user.id ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'"
+            class="w-full px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">{{ user.name }}</p>
+                <p class="text-xs text-slate-500">{{ user.email }}</p>
+              </div>
+
+              <span
+                class="rounded-full px-2 py-1 text-xs font-medium"
+                [ngClass]="user.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'"
+              >
+                {{ user.isActive ? 'Activo' : 'Inactivo' }}
+              </span>
+            </div>
+
+            <p class="mt-2 text-xs uppercase tracking-wide text-slate-500">{{ user.role }}</p>
+          </button>
+        </li>
+
+        <li *ngIf="users.length === 0" role="status" aria-live="polite" class="px-4 py-8 text-center text-sm text-slate-500">
+          No se encontraron usuarios.
+        </li>
+      </ul>
+
+      <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
+        <span>Pagina {{ page }} de {{ totalPages || 1 }}</span>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            (click)="previousPage()"
+            [disabled]="page <= 1"
+            class="rounded-lg border border-slate-300 px-3 py-1 font-medium transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <button
+            type="button"
+            (click)="nextPage()"
+            [disabled]="page >= totalPages"
+            class="rounded-lg border border-slate-300 px-3 py-1 font-medium transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article class="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <ng-container *ngIf="selectedUser as currentUser; else emptyState">
+        <div class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-slate-900">Detalle de usuario</h2>
+            <p class="mt-1 text-sm text-slate-600">Informacion del usuario seleccionado.</p>
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              type="button"
+              (click)="goToEdit(currentUser.id)"
+              class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+            >
+              Editar
+            </button>
+
+            <button
+              type="button"
+              (click)="requestDeleteUser(currentUser)"
+              class="h-10 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+
+        <div
+          *ngIf="detailErrorMessage"
+          role="alert"
+          aria-live="assertive"
+          class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {{ detailErrorMessage }}
+        </div>
+
+        <div
+          *ngIf="detailLoading"
+          role="status"
+          aria-live="polite"
+          class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+        >
+          Cargando detalle...
+        </div>
+
+        <dl *ngIf="!detailLoading" class="grid gap-4 sm:grid-cols-2">
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Nombre</dt>
+            <dd class="mt-1 text-sm font-medium text-slate-900">{{ currentUser.name }}</dd>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Correo</dt>
+            <dd class="mt-1 text-sm font-medium text-slate-900">{{ currentUser.email }}</dd>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Rol</dt>
+            <dd class="mt-1 text-sm font-medium text-slate-900">{{ currentUser.role }}</dd>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Estado</dt>
+            <dd class="mt-1 text-sm font-medium text-slate-900">{{ currentUser.isActive ? 'Activo' : 'Inactivo' }}</dd>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">ID</dt>
+            <dd class="mt-1 break-all text-sm font-medium text-slate-900">{{ currentUser.id }}</dd>
+          </div>
+        </dl>
+      </ng-container>
+
+      <ng-template #emptyState>
+        <div role="status" aria-live="polite" class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-600">
+          Selecciona un usuario en la lista para ver su informacion.
+        </div>
+      </ng-template>
+    </article>
+  </section>
+
+  <router-outlet></router-outlet>
+
+  <div *ngIf="userToDelete as currentDelete" class="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <button
+      type="button"
+      class="absolute inset-0 bg-slate-900/45"
+      aria-label="Cerrar confirmacion"
+      (click)="cancelDelete()"
+    ></button>
+
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-user-title"
+      aria-describedby="delete-user-description"
+      class="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+    >
+      <h3 id="delete-user-title" class="text-lg font-semibold text-slate-900">
+        Eliminar usuario
+      </h3>
+
+      <p id="delete-user-description" class="mt-2 text-sm text-slate-600">
+        Esta accion eliminara a
+        <span class="font-semibold text-slate-900">{{ currentDelete.name }}</span>
+        y no se puede deshacer.
+      </p>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          (click)="cancelDelete()"
+          [disabled]="deleting"
+          class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          (click)="confirmDelete()"
+          [disabled]="deleting"
+          class="h-10 rounded-xl bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {{ deleting ? 'Eliminando...' : 'Eliminar' }}
+        </button>
+      </div>
+    </section>
+  </div>
+</div>

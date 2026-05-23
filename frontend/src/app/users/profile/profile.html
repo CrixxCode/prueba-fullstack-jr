@@ -1,0 +1,232 @@
+<div class="space-y-8">
+  <section class="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+    <div>
+      <p class="text-sm font-semibold text-blue-600">
+        Cuenta personal
+      </p>
+
+      <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+        Mi Perfil
+      </h1>
+
+      <p class="mt-2 max-w-2xl text-sm text-slate-500">
+        Consulta y actualiza la informacion basica de tu cuenta.
+      </p>
+    </div>
+  </section>
+
+  <div
+    *ngIf="errorMessage"
+    role="alert"
+    aria-live="assertive"
+    class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    *ngIf="successMessage"
+    role="status"
+    aria-live="polite"
+    class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+  >
+    {{ successMessage }}
+  </div>
+
+  <div
+    *ngIf="loading"
+    role="status"
+    aria-live="polite"
+    class="rounded-3xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-sm"
+  >
+    Cargando perfil...
+  </div>
+
+  <section *ngIf="!loading && currentUser" class="grid gap-6 xl:grid-cols-[380px_1fr]">
+    <aside class="space-y-6">
+      <article class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+        <div class="relative h-36 bg-blue-600"></div>
+
+        <div class="-mt-16 px-6 pb-7 text-center">
+          <div class="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full border-4 border-white bg-blue-100 text-5xl font-bold text-blue-700 shadow-sm">
+            {{ avatarLetter }}
+
+            <div class="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-sm shadow-sm">
+              <i class="fa-solid fa-camera"></i>
+            </div>
+          </div>
+
+          <h2 class="mt-5 text-2xl font-bold text-slate-950">
+            {{ currentUser.name }}
+          </h2>
+
+          <p class="mt-1 text-sm text-slate-500">
+            {{ currentUser.email }}
+          </p>
+
+          <span class="mt-4 inline-flex rounded-full px-4 py-1.5 text-xs font-semibold" [ngClass]="{
+            'bg-violet-50 text-violet-700': currentUser.role === 'admin',
+            'bg-blue-50 text-blue-700': currentUser.role === 'user'
+          }">
+            {{ currentUser.role === 'admin' ? 'Administrador' : 'Usuario' }}
+          </span>
+        </div>
+      </article>
+
+      <article class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+        <h3 class="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+          Estado de la cuenta
+        </h3>
+
+        <div class="mt-5 flex items-center gap-4">
+          <div class="flex h-14 w-14 items-center justify-center rounded-2xl" [ngClass]="{
+            'bg-emerald-50 text-emerald-700': currentUser.isActive,
+            'bg-red-50 text-red-700': !currentUser.isActive
+          }">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+
+          <div>
+            <p class="text-xl font-bold text-slate-950">
+              {{ currentUser.isActive ? 'Activa' : 'Inactiva' }}
+            </p>
+
+            <p class="text-sm text-slate-500">
+              {{ currentUser.isActive ? 'Cuenta habilitada para iniciar sesion.' : 'Cuenta deshabilitada.' }}
+            </p>
+          </div>
+        </div>
+      </article>
+    </aside>
+
+    <main class="space-y-6">
+      <form
+        [formGroup]="form"
+        (ngSubmit)="submit()"
+        [attr.aria-busy]="saving ? 'true' : 'false'"
+        class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm"
+      >
+        <div class="mb-6 flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 md:flex-row md:items-center">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-950">
+              Informacion Personal
+            </h2>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Datos principales asociados a tu cuenta.
+            </p>
+          </div>
+
+          <span class="inline-flex w-fit rounded-full px-4 py-1.5 text-xs font-semibold" [ngClass]="{
+            'bg-emerald-50 text-emerald-700': editMode,
+            'bg-slate-100 text-slate-600': !editMode
+          }">
+            {{ editMode ? 'Modo edicion' : 'Solo lectura' }}
+          </span>
+        </div>
+
+        <div class="grid gap-5 md:grid-cols-2">
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">
+              Nombre completo
+            </label>
+
+            <input type="text" formControlName="name" [readonly]="!editMode" [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 read-only:bg-slate-50 read-only:text-slate-500" />
+
+            <p *ngIf="form.controls.name.touched && form.controls.name.invalid" class="mt-2 text-xs text-red-600">
+              El nombre debe tener minimo 3 caracteres.
+            </p>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">
+              Correo electronico
+            </label>
+
+            <input type="email" formControlName="email" class="h-12 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500 outline-none" />
+
+            <p class="mt-2 text-xs text-slate-400">
+              El correo no se edita desde esta vista.
+            </p>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="mb-2 block text-sm font-semibold text-slate-700">
+              Nueva contrasena
+            </label>
+
+            <input type="password" formControlName="password" [readonly]="!editMode" [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid" placeholder="Dejar vacio para no cambiar" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 read-only:bg-slate-50 read-only:text-slate-500" />
+
+            <p class="mt-2 text-xs text-slate-400">
+              Solo completa este campo si deseas cambiar tu contrasena.
+            </p>
+
+            <p *ngIf="form.controls.password.touched && form.controls.password.invalid" class="mt-1 text-xs text-red-600">
+              {{ passwordPolicyMessage }}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+          <button *ngIf="!editMode" type="button" (click)="enableEdit()" class="h-12 rounded-2xl bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+            Editar informacion
+          </button>
+
+          <button *ngIf="editMode" type="button" (click)="cancelEdit()" class="h-12 rounded-2xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">
+            Cancelar
+          </button>
+
+          <button *ngIf="editMode" type="submit" [disabled]="saving" class="h-12 rounded-2xl bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
+            {{ saving ? 'Guardando...' : 'Guardar cambios' }}
+          </button>
+        </div>
+      </form>
+
+      <section class="grid gap-5 md:grid-cols-2">
+        <article class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <h3 class="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+            Rol asignado
+          </h3>
+
+          <div class="mt-5 flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <i class="fa-solid fa-user"></i>
+            </div>
+
+            <div>
+              <p class="text-xl font-bold text-slate-950">
+                {{ currentUser.role }}
+              </p>
+
+              <p class="text-sm text-slate-500">
+                {{ currentUser.role === 'admin' ? 'Puede gestionar usuarios del sistema.' : 'Puede gestionar solo su perfil.' }}
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <h3 class="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+            Seguridad
+          </h3>
+
+          <div class="mt-5 flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+              <i class="fa-solid fa-lock"></i>
+            </div>
+
+            <div>
+              <p class="text-xl font-bold text-slate-950">
+                JWT activo
+              </p>
+
+              <p class="text-sm text-slate-500">
+                Sesion protegida mediante token Bearer.
+              </p>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </section>
+</div>

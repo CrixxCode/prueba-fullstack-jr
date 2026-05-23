@@ -1,0 +1,170 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+  <button
+    type="button"
+    aria-label="Cerrar formulario"
+    (click)="goBack()"
+    class="absolute inset-0 bg-slate-900/45"
+  ></button>
+
+  <section
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="user-form-title"
+    aria-describedby="user-form-description"
+    class="relative z-10 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl"
+  >
+    <header class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+      <div>
+        <h2 id="user-form-title" class="text-xl font-semibold text-slate-900">
+          {{ isEditMode ? 'Editar usuario' : 'Crear usuario' }}
+        </h2>
+        <p id="user-form-description" class="mt-1 text-sm text-slate-600">
+          {{ isEditMode ? 'Actualiza la informacion del usuario seleccionado.' : 'Completa los datos del nuevo usuario.' }}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        (click)="goBack()"
+        class="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+      >
+        Cerrar
+      </button>
+    </header>
+
+    <form
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      [attr.aria-busy]="loading || saving ? 'true' : 'false'"
+      class="max-h-[80vh] overflow-y-auto px-6 py-5"
+    >
+      <div
+        *ngIf="errorMessage"
+        role="alert"
+        aria-live="assertive"
+        class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+      >
+        {{ errorMessage }}
+      </div>
+
+      <div
+        *ngIf="successMessage"
+        role="status"
+        aria-live="polite"
+        class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+      >
+        {{ successMessage }}
+      </div>
+
+      <div
+        *ngIf="loading"
+        role="status"
+        aria-live="polite"
+        class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600"
+      >
+        Cargando informacion...
+      </div>
+
+      <div *ngIf="!loading" class="grid gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label for="name" class="mb-2 block text-sm font-medium text-slate-700">
+            Nombre completo
+          </label>
+          <input
+            id="name"
+            type="text"
+            formControlName="name"
+            [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+            placeholder="Ej: Juan Perez"
+            class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          <p *ngIf="form.controls.name.touched && form.controls.name.invalid" class="mt-1 text-xs text-red-600">
+            El nombre debe tener minimo 3 caracteres.
+          </p>
+        </div>
+
+        <div class="sm:col-span-2">
+          <label for="email" class="mb-2 block text-sm font-medium text-slate-700">
+            Correo electronico
+          </label>
+          <input
+            id="email"
+            type="email"
+            formControlName="email"
+            [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+            placeholder="usuario@empresa.com"
+            class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+          />
+          <p *ngIf="form.controls.email.touched && form.controls.email.invalid" class="mt-1 text-xs text-red-600">
+            Ingresa un correo valido.
+          </p>
+          <p *ngIf="isEditMode" class="mt-1 text-xs text-slate-500">
+            El correo no se puede editar.
+          </p>
+        </div>
+
+        <div>
+          <label for="password" class="mb-2 block text-sm font-medium text-slate-700">
+            Contrasena
+          </label>
+          <input
+            id="password"
+            type="password"
+            formControlName="password"
+            [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+            [placeholder]="isEditMode ? 'Dejar vacio para no cambiar' : 'Minimo 8, mayuscula, minuscula, numero y simbolo'"
+            class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          <p *ngIf="form.controls.password.touched && form.controls.password.invalid" class="mt-1 text-xs text-red-600">
+            {{ passwordPolicyMessage }}
+          </p>
+        </div>
+
+        <div>
+          <label for="role" class="mb-2 block text-sm font-medium text-slate-700">
+            Rol
+          </label>
+          <select
+            id="role"
+            formControlName="role"
+            class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            <option *ngFor="let role of roles; trackBy: trackByRole" [value]="role">{{ role }}</option>
+          </select>
+        </div>
+
+        <div class="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <label class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-medium text-slate-800">Estado activo</p>
+              <p class="text-xs text-slate-500">Si esta inactivo, el usuario no podra iniciar sesion.</p>
+            </div>
+            <input
+              type="checkbox"
+              formControlName="isActive"
+              class="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+          </label>
+        </div>
+      </div>
+
+      <footer class="mt-6 flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          (click)="goBack()"
+          class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          [disabled]="saving"
+          class="h-10 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {{ saving ? 'Guardando...' : (isEditMode ? 'Guardar cambios' : 'Crear usuario') }}
+        </button>
+      </footer>
+    </form>
+  </section>
+</div>

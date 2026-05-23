@@ -17,17 +17,31 @@ public class UsersController : ApiControllerBase
 {
     private const int DefaultPageSize = 10;
     private const int MaxPageSize = 100;
+    private const long MaxAvatarSizeBytes = 2 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedAvatarExtensions = new(
+        [".jpg", ".jpeg", ".png", ".webp"],
+        StringComparer.OrdinalIgnoreCase
+    );
+
+    private static readonly HashSet<string> AllowedAvatarContentTypes = new(
+        ["image/jpeg", "image/png", "image/webp"],
+        StringComparer.OrdinalIgnoreCase
+    );
 
     private readonly AppDbContext _context;
     private readonly AuthSecurityService _authSecurityService;
+    private readonly IWebHostEnvironment _environment;
 
     public UsersController(
         AppDbContext context,
-        AuthSecurityService authSecurityService
+        AuthSecurityService authSecurityService,
+        IWebHostEnvironment environment
     )
     {
         _context = context;
         _authSecurityService = authSecurityService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -64,14 +78,6 @@ public class UsersController : ApiControllerBase
         var users = await sortedQuery
             .Skip((page - 1) * size)
             .Take(size)
-            .Select(u => new UserResponseDto
-            {
-                Id = u.Id,
-                Email = u.Email,
-                Name = u.Name,
-                Role = u.Role,
-                IsActive = u.IsActive
-            })
             .ToListAsync();
 
         var response = new UserListResponseDto
@@ -80,7 +86,7 @@ public class UsersController : ApiControllerBase
             Size = size,
             TotalItems = totalItems,
             TotalPages = (int)Math.Ceiling(totalItems / (double)size),
-            Items = users
+            Items = users.Select(BuildUserResponse).ToList()
         };
 
         return Ok(response);
@@ -99,23 +105,14 @@ public class UsersController : ApiControllerBase
 
         var user = await _context.Users
             .AsNoTracking()
-            .Where(u => u.Id == id)
-            .Select(u => new UserResponseDto
-            {
-                Id = u.Id,
-                Email = u.Email,
-                Name = u.Name,
-                Role = u.Role,
-                IsActive = u.IsActive
-            })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(u => u.Id == id);
 
         if (user == null)
         {
             return NotFoundError("Usuario no encontrado.");
         }
 
-        return Ok(user);
+        return Ok(BuildUserResponse(user));
     }
 
     [HttpPost]
@@ -189,16 +186,11 @@ public class UsersController : ApiControllerBase
             return ConflictError("El correo ya esta registrado.");
         }
 
-        var response = new UserResponseDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            Name = user.Name,
-            Role = user.Role,
-            IsActive = user.IsActive
-        };
-
-        return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, response);
+        return CreatedAtAction(
+            nameof(GetUserById),
+            new { id = user.Id },
+            BuildUserResponse(user)
+        );
     }
 
     [HttpPut("{id:guid}")]
@@ -292,16 +284,7 @@ public class UsersController : ApiControllerBase
             return ConflictError("El correo ya esta registrado.");
         }
 
-        var response = new UserResponseDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            Name = user.Name,
-            Role = user.Role,
-            IsActive = user.IsActive
-        };
-
-        return Ok(response);
+        return Ok(BuildUserResponse(user));
     }
 
     [HttpDelete("{id:guid}")]
@@ -315,13 +298,137 @@ public class UsersController : ApiControllerBase
             return NotFoundError("Usuario no encontrado.");
         }
 
+        var avatarPath = user.AvatarPath;
+
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
+        DeleteAvatarFileIfExists(avatarPath);
 
         return Ok(new
         {
             message = "Usuario eliminado correctamente."
         });
+    }
+
+    [HttpPost("{id:guid}/avatar")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxAvatarSizeBytes + 1024)]
+    public async Task<ActionResult<UserResponseDto>> UploadAvatar(
+        Guid id,
+        IFormFile? file
+    )
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequestError(
+                "Debes adjuntar una imagen de avatar.",
+                code: "validation_error"
+            );
+        }
+
+        if (file.Length > MaxAvatarSizeBytes)
+        {
+            return BadRequestError(
+                "El avatar supera el tamano maximo permitido de 2 MB.",
+                code: "validation_error"
+            );
+        }
+
+        var extension = Path.GetExtension(file.FileName);
+        if (string.IsNullOrWhiteSpace(extension) ||
+            !AllowedAvatarExtensions.Contains(extension))
+        {
+            return BadRequestError(
+                "Formato de imagen no permitido. Usa JPG, PNG o WEBP.",
+                code: "validation_error"
+            );
+        }
+
+        var contentType = file.ContentType?.Trim();
+        if (string.IsNullOrWhiteSpace(contentType) ||
+            !AllowedAvatarContentTypes.Contains(contentType))
+        {
+            return BadRequestError(
+                "Tipo MIME de imagen no valido. Usa image/jpeg, image/png o image/webp.",
+                code: "validation_error"
+            );
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var currentUserRole = GetCurrentUserRole();
+
+        if (currentUserRole != "admin" && currentUserId != id)
+        {
+            return ForbiddenError();
+        }
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            return NotFoundError("Usuario no encontrado.");
+        }
+
+        var avatarsDirectory = GetAvatarStoragePath();
+        Directory.CreateDirectory(avatarsDirectory);
+
+        var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var relativeAvatarPath = Path.Combine("avatars", fileName).Replace('\\', '/');
+        var avatarFullPath = Path.Combine(avatarsDirectory, fileName);
+
+        await using (var stream = new FileStream(
+            avatarFullPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None
+        ))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var previousAvatarPath = user.AvatarPath;
+        user.AvatarPath = relativeAvatarPath;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            DeleteAvatarFileIfExists(relativeAvatarPath);
+            throw;
+        }
+
+        DeleteAvatarFileIfExists(previousAvatarPath);
+
+        return Ok(BuildUserResponse(user));
+    }
+
+    [HttpDelete("{id:guid}/avatar")]
+    public async Task<ActionResult<UserResponseDto>> DeleteAvatar(Guid id)
+    {
+        var currentUserId = GetCurrentUserId();
+        var currentUserRole = GetCurrentUserRole();
+
+        if (currentUserRole != "admin" && currentUserId != id)
+        {
+            return ForbiddenError();
+        }
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            return NotFoundError("Usuario no encontrado.");
+        }
+
+        var previousAvatarPath = user.AvatarPath;
+        user.AvatarPath = null;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        DeleteAvatarFileIfExists(previousAvatarPath);
+
+        return Ok(BuildUserResponse(user));
     }
 
     private Guid GetCurrentUserId()
@@ -395,5 +502,62 @@ public class UsersController : ApiControllerBase
                 ? query.OrderByDescending(u => u.CreatedAt).ThenByDescending(u => u.Id)
                 : query.OrderBy(u => u.CreatedAt).ThenBy(u => u.Id)
         };
+    }
+
+    private UserResponseDto BuildUserResponse(User user)
+    {
+        return new UserResponseDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            Name = user.Name,
+            Role = user.Role,
+            AvatarUrl = BuildAvatarUrl(user.AvatarPath),
+            IsActive = user.IsActive
+        };
+    }
+
+    private string? BuildAvatarUrl(string? avatarPath)
+    {
+        if (string.IsNullOrWhiteSpace(avatarPath))
+        {
+            return null;
+        }
+
+        var normalizedPath = avatarPath.Replace('\\', '/').TrimStart('/');
+        return $"{Request.Scheme}://{Request.Host}/uploads/{normalizedPath}";
+    }
+
+    private string GetAvatarStoragePath()
+    {
+        return Path.Combine(_environment.ContentRootPath, "uploads", "avatars");
+    }
+
+    private void DeleteAvatarFileIfExists(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return;
+        }
+
+        var normalizedRelativePath = relativePath
+            .Replace('/', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        var fullPath = Path.Combine(_environment.ContentRootPath, "uploads", normalizedRelativePath);
+
+        if (!System.IO.File.Exists(fullPath))
+        {
+            return;
+        }
+
+        try
+        {
+            System.IO.File.Delete(fullPath);
+        }
+        catch
+        {
+            // Eliminar avatar previo es best-effort.
+        }
     }
 }

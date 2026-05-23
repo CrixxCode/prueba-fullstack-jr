@@ -15,6 +15,13 @@ prueba-fullstack-jr/
 |- frontend/
 ```
 
+## Supuestos
+
+- Ejecucion en entorno local de desarrollo (no produccion).
+- SQL Server esta instalado/activo y accesible desde la maquina local.
+- Puertos por defecto disponibles: backend `5241`, frontend `4200`.
+- `ASPNETCORE_ENVIRONMENT=Development` para usar Swagger UI.
+
 ## Requisitos previos
 
 - .NET SDK 8.0+
@@ -71,6 +78,21 @@ Notas:
 - `backend/.env.example` si se sube como plantilla.
 
 ## Base de datos
+
+Conexion SQL Server:
+- Se usa `ConnectionStrings__DefaultConnection` desde `backend/.env`.
+
+Ejemplo con autenticacion de Windows:
+
+```env
+ConnectionStrings__DefaultConnection=Server=.\SQLEXPRESS;Database=FullStackJrDb;Trusted_Connection=True;TrustServerCertificate=True;
+```
+
+Ejemplo con usuario/clave SQL:
+
+```env
+ConnectionStrings__DefaultConnection=Server=localhost,1433;Database=FullStackJrDb;User Id=sa;Password=TuPassword!123;TrustServerCertificate=True;
+```
 
 Desde `backend/`:
 
@@ -148,6 +170,16 @@ Usuarios:
 - `POST /api/users` (admin)
 - `PUT /api/users/{id}` (admin o dueno con restricciones)
 - `DELETE /api/users/{id}` (admin)
+- `POST /api/users/{id}/avatar` (admin o dueno, multipart/form-data)
+- `DELETE /api/users/{id}/avatar` (admin o dueno)
+
+## Avatar de usuario
+
+- Almacenamiento local: `backend/uploads/avatars/`.
+- Archivos permitidos: `image/jpeg`, `image/png`, `image/webp`.
+- Tamano maximo: `2 MB` por imagen.
+- En frontend, la carga de avatar se hace desde la vista `Mi Perfil`.
+- El backend devuelve `avatarUrl` en los DTOs de usuario para renderizar la imagen.
 
 ## Pruebas de API
 
@@ -303,3 +335,15 @@ Consulta de usuarios (solo admin):
   - Si el refresh falla, volver a iniciar sesion.
 - Error `403`:
   - Accion restringida por rol o por propiedad del recurso.
+
+## Limitaciones conocidas
+
+- CORS configurado para `http://localhost:4200` en desarrollo.
+- No hay `docker-compose` para levantar backend + frontend + SQL Server en un solo comando.
+- No hay coleccion Postman mantenida en el repo.
+
+## Proximos pasos
+
+1. Versionar una coleccion Postman (`docs/postman/*.json`) con variables por ambiente.
+2. Parametrizar origenes CORS por entorno (`dev`, `staging`, `prod`).
+3. Agregar `docker-compose` para facilitar onboarding y pruebas locales.

@@ -1,0 +1,133 @@
+<div class="space-y-6" [attr.aria-busy]="loading ? 'true' : 'false'">
+  <section class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-900">
+        Logs de autenticacion
+      </h1>
+      <p class="mt-1 text-sm text-slate-600">
+        Historial de eventos de login, refresh y logout.
+      </p>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto]">
+      <input
+        type="text"
+        [(ngModel)]="eventType"
+        placeholder="Tipo de evento (ej: login_failed)"
+        class="h-10 rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+
+      <input
+        type="email"
+        [(ngModel)]="email"
+        placeholder="Filtrar por correo"
+        class="h-10 rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+
+      <select
+        [(ngModel)]="outcome"
+        class="h-10 rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        <option value="all">Todos</option>
+        <option value="success">Exitosos</option>
+        <option value="failed">Fallidos</option>
+      </select>
+
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          (click)="applyFilters()"
+          class="h-10 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+        >
+          Filtrar
+        </button>
+
+        <button
+          type="button"
+          (click)="clearFilters()"
+          class="h-10 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+        >
+          Limpiar
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div
+      *ngIf="errorMessage"
+      role="alert"
+      aria-live="assertive"
+      class="m-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <div *ngIf="loading" role="status" aria-live="polite" class="p-6 text-sm text-slate-600">
+      Cargando logs...
+    </div>
+
+    <div *ngIf="!loading" class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-4 py-3">Fecha</th>
+            <th class="px-4 py-3">Evento</th>
+            <th class="px-4 py-3">Estado</th>
+            <th class="px-4 py-3">Correo</th>
+            <th class="px-4 py-3">Motivo</th>
+            <th class="px-4 py-3">IP</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-slate-100">
+          <tr *ngFor="let log of logs; trackBy: trackByLogId">
+            <td class="px-4 py-3 text-slate-700">{{ formatDate(log.createdAt) }}</td>
+            <td class="px-4 py-3 font-medium text-slate-900">{{ formatEventType(log.eventType) }}</td>
+            <td class="px-4 py-3">
+              <span
+                class="inline-flex rounded-full px-2 py-1 text-xs font-semibold"
+                [ngClass]="log.isSuccess ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'"
+              >
+                {{ log.isSuccess ? 'Exitoso' : 'Fallido' }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-slate-700">{{ log.email || '-' }}</td>
+            <td class="px-4 py-3 text-slate-700">{{ log.failureReason || '-' }}</td>
+            <td class="px-4 py-3 text-slate-700">{{ log.ipAddress || '-' }}</td>
+          </tr>
+
+          <tr *ngIf="logs.length === 0">
+            <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">
+              No hay registros para los filtros aplicados.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+      <span class="break-words">Pagina {{ page }} de {{ totalPages || 1 }} ({{ totalItems }} registros)</span>
+      <div class="flex gap-2">
+        <button
+          type="button"
+          (click)="previousPage()"
+          [disabled]="page <= 1"
+          class="rounded-lg border border-slate-300 px-3 py-1 font-medium transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <button
+          type="button"
+          (click)="nextPage()"
+          [disabled]="page >= totalPages"
+          class="rounded-lg border border-slate-300 px-3 py-1 font-medium transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Siguiente
+        </button>
+      </div>
+    </div>
+  </section>
+</div>

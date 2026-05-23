@@ -431,6 +431,7 @@ public class AuthController : ApiControllerBase
                 Email = user.Email,
                 Name = user.Name,
                 Role = user.Role,
+                AvatarUrl = BuildAvatarUrl(user.AvatarPath),
                 IsActive = user.IsActive
             }
         };
@@ -505,5 +506,16 @@ public class AuthController : ApiControllerBase
         }
 
         return value.Length <= maxLength ? value : value[..maxLength];
+    }
+
+    private string? BuildAvatarUrl(string? avatarPath)
+    {
+        if (string.IsNullOrWhiteSpace(avatarPath))
+        {
+            return null;
+        }
+
+        var normalizedPath = avatarPath.Replace('\\', '/').TrimStart('/');
+        return $"{Request.Scheme}://{Request.Host}/uploads/{normalizedPath}";
     }
 }

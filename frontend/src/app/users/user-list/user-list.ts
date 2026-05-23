@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
+  ChangeDetectorRef,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -10,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterOutlet } from '@angular/router';
+import { finalize } from 'rxjs';
 
 import { User } from '../../core/models/user.model';
 import { UserService } from '../../core/services/user.service';
@@ -22,11 +24,14 @@ import { UserService } from '../../core/services/user.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class UserList implements OnInit {
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private usersRequestSeq = 0;
+  private detailRequestSeq = 0;
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -72,25 +77,50 @@ export class UserList implements OnInit {
   }
 
   loadUsers(): void {
+    const requestId = ++this.usersRequestSeq;
     this.loading = true;
     this.errorMessage = '';
 
-    this.userService.getUsers(this.search, this.page, this.size).subscribe({
+    this.userService
+      .getUsers(this.search, this.page, this.size)
+      .pipe(
+        finalize(() => {
+          if (requestId !== this.usersRequestSeq) {
+            return;
+          }
+
+          this.loading = false;
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
       next: (response) => {
+        if (requestId !== this.usersRequestSeq) {
+          return;
+        }
+
         this.users = response.items;
         this.page = response.page;
         this.size = response.size;
         this.totalItems = response.totalItems;
         this.totalPages = response.totalPages;
 
-        this.syncSelectedUser();
+        try {
+          this.syncSelectedUser();
+        } catch {
+          this.detailLoading = false;
+          this.detailErrorMessage = 'No se pudo sincronizar el detalle del usuario.';
+        }
+
+        this.cdr.markForCheck();
       },
       error: (error) => {
+        if (requestId !== this.usersRequestSeq) {
+          return;
+        }
+
         this.errorMessage = error?.error?.message || 'No se pudieron cargar los usuarios.';
-        this.loading = false;
-      },
-      complete: () => {
-        this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }
@@ -124,23 +154,33 @@ export class UserList implements OnInit {
   }
 
   loadSelectedUser(id: string): void {
+    const requestId = ++this.detailRequestSeq;
     this.detailLoading = true;
     this.detailErrorMessage = '';
 
-    this.userService.getUserById(id).subscribe({
+    this.userService
+      .getUserById(id)
+      .pipe(
+        finalize(() => {
+          if (requestId !== this.detailRequestSeq || this.selectedUserId !== id) {
+            return;
+          }
+
+          this.detailLoading = false;
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
       next: (user) => {
-        if (this.selectedUserId === id) {
+        if (requestId === this.detailRequestSeq && this.selectedUserId === id) {
           this.selectedUser = user;
+          this.cdr.markForCheck();
         }
       },
       error: (error) => {
-        if (this.selectedUserId === id) {
+        if (requestId === this.detailRequestSeq && this.selectedUserId === id) {
           this.detailErrorMessage = error?.error?.message || 'No se pudo cargar el detalle del usuario.';
-        }
-      },
-      complete: () => {
-        if (this.selectedUserId === id) {
-          this.detailLoading = false;
+          this.cdr.markForCheck();
         }
       }
     });
@@ -215,9 +255,11 @@ export class UserList implements OnInit {
       },
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo eliminar el usuario.';
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.deleting = false;
+        this.cdr.markForCheck();
       }
     });
   }
@@ -243,6 +285,7 @@ export class UserList implements OnInit {
   dismissToast(): void {
     this.toastVisible = false;
     this.clearToastTimer();
+    this.cdr.markForCheck();
   }
 
   trackByUserId(_: number, user: User): string {
@@ -266,10 +309,12 @@ export class UserList implements OnInit {
     this.toastType = type;
     this.toastVisible = true;
     this.clearToastTimer();
+    this.cdr.markForCheck();
 
     this.toastTimer = setTimeout(() => {
       this.toastVisible = false;
       this.toastTimer = null;
+      this.cdr.markForCheck();
     }, 3500);
   }
 

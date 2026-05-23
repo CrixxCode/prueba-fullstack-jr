@@ -99,7 +99,7 @@
             Ingresa un correo valido.
           </p>
           <p *ngIf="isEditMode" class="mt-1 text-xs text-slate-500">
-            El correo no se puede editar.
+            Puedes actualizar el correo del usuario.
           </p>
         </div>
 
@@ -136,14 +136,33 @@
         <div class="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <label class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-medium text-slate-800">Estado activo</p>
+              <p class="text-sm font-medium text-slate-800">Estado de la cuenta</p>
               <p class="text-xs text-slate-500">Si esta inactivo, el usuario no podra iniciar sesion.</p>
             </div>
-            <input
-              type="checkbox"
-              formControlName="isActive"
-              class="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
+
+            <span class="inline-flex items-center gap-3">
+              <span
+                class="text-xs font-semibold uppercase tracking-wide"
+                [ngClass]="form.controls.isActive.value ? 'text-emerald-700' : 'text-slate-500'"
+              >
+                {{ form.controls.isActive.value ? 'Activo' : 'Inactivo' }}
+              </span>
+
+              <span class="relative inline-flex items-center">
+                <input
+                  type="checkbox"
+                  formControlName="isActive"
+                  class="peer sr-only"
+                  aria-label="Cambiar estado de la cuenta"
+                />
+                <span
+                  class="h-6 w-11 rounded-full bg-slate-300 transition peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 peer-focus:ring-offset-2 peer-checked:bg-emerald-600"
+                ></span>
+                <span
+                  class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5"
+                ></span>
+              </span>
+            </span>
           </label>
         </div>
       </div>

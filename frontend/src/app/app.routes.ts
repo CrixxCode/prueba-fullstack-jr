@@ -47,6 +47,12 @@ export const routes: Routes = [
               import('./users/user-form/user-form').then((m) => m.UserForm)
           }
         ]
+      },
+      {
+        path: 'audit/auth',
+        loadComponent: () =>
+          import('./audit/auth-logs/auth-logs').then((m) => m.AuthLogs),
+        canActivate: [adminGuard]
       }
     ]
   },

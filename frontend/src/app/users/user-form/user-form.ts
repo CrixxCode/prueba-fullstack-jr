@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, HostListener, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -19,6 +19,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class UserForm implements OnInit {
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly fb = inject(FormBuilder);
   private readonly userService = inject(UserService);
   private readonly route = inject(ActivatedRoute);
@@ -71,15 +72,15 @@ export class UserForm implements OnInit {
           role: user.role,
           isActive: user.isActive
         });
-
-        this.form.controls.email.disable();
       },
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo cargar el usuario.';
         this.loading = false;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }
@@ -123,9 +124,11 @@ export class UserForm implements OnInit {
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo crear el usuario.';
         this.saving = false;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.saving = false;
+        this.cdr.markForCheck();
       }
     });
   }
@@ -135,6 +138,7 @@ export class UserForm implements OnInit {
 
     this.userService.updateUser(id, {
       name: value.name ?? '',
+      email: value.email ?? '',
       password: value.password?.trim() ? value.password : null,
       role: value.role ?? 'user',
       isActive: value.isActive ?? true
@@ -147,9 +151,11 @@ export class UserForm implements OnInit {
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo actualizar el usuario.';
         this.saving = false;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.saving = false;
+        this.cdr.markForCheck();
       }
     });
   }

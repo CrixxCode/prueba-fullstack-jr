@@ -1,5 +1,15 @@
-<div class="min-h-screen bg-[#f4f7fb] text-slate-900">
-  <aside class="fixed left-0 top-0 z-30 hidden h-screen w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+<div class="min-h-screen overflow-x-hidden bg-[#f4f7fb] text-slate-900">
+  <div
+    *ngIf="sidebarOpen"
+    class="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
+    (click)="closeSidebar()"
+    aria-hidden="true"
+  ></div>
+
+  <aside
+    class="fixed left-0 top-0 z-30 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transform-gpu transition-transform duration-300 ease-in-out"
+    [ngClass]="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+  >
     <div class="flex h-20 items-center gap-3 px-7">
       <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
         <span class="text-xl font-bold">A</span>
@@ -14,6 +24,7 @@
     <nav class="mt-6 flex flex-1 flex-col gap-2 px-3">
       <a
         routerLink="/profile"
+        (click)="closeSidebarOnMobile()"
         routerLinkActive="bg-blue-50 text-blue-700"
         class="flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
       >
@@ -24,11 +35,23 @@
       <a
         *ngIf="user?.role === 'admin'"
         routerLink="/users"
+        (click)="closeSidebarOnMobile()"
         routerLinkActive="bg-blue-50 text-blue-700"
         class="flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
       >
         <i class="fa-solid fa-users w-4 text-center"></i>
         Usuarios
+      </a>
+
+      <a
+        *ngIf="user?.role === 'admin'"
+        routerLink="/audit/auth"
+        (click)="closeSidebarOnMobile()"
+        routerLinkActive="bg-blue-50 text-blue-700"
+        class="flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+      >
+        <i class="fa-solid fa-file-lines w-4 text-center"></i>
+        Logs
       </a>
     </nav>
 
@@ -54,30 +77,52 @@
     </div>
   </aside>
 
-  <main class="lg:pl-72">
-    <header class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur lg:px-8">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+  <main class="min-w-0 transition-[padding] duration-300 ease-in-out" [ngClass]="sidebarOpen ? 'lg:pl-72' : 'lg:pl-0'">
+    <header class="sticky top-0 z-20 flex h-20 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-5 lg:px-8">
+      <div class="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          (click)="toggleSidebar()"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-transparent text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+          aria-label="Abrir o cerrar menu lateral"
+        >
+          <i class="fa-solid" [ngClass]="sidebarOpen ? 'fa-xmark' : 'fa-bars'"></i>
+        </button>
+
+        <div class="min-w-0">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Panel
         </p>
 
-        <h2 class="text-xl font-bold text-slate-950">
+        <h2 class="truncate text-base font-bold text-slate-950 sm:text-xl">
           {{ user?.role === 'admin' ? 'Admin Panel' : 'User Panel' }}
         </h2>
+        </div>
       </div>
 
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-3 border-l border-slate-200 pl-4">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
-            {{ user?.name?.charAt(0) || 'U' }}
+      <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+        <div class="flex items-center gap-2 border-l border-slate-200 pl-2 sm:gap-3 sm:pl-4">
+          <div class="h-10 w-10 overflow-hidden rounded-full bg-blue-100">
+            <img
+              *ngIf="user?.avatarUrl; else avatarFallback"
+              [src]="user?.avatarUrl || ''"
+              [alt]="'Avatar de ' + (user?.name || 'usuario')"
+              class="h-full w-full object-cover"
+            />
+
+            <ng-template #avatarFallback>
+              <div class="flex h-full w-full items-center justify-center text-sm font-bold text-blue-700">
+                {{ user?.name?.charAt(0) || 'U' }}
+              </div>
+            </ng-template>
           </div>
 
-          <div class="hidden md:block">
-            <p class="text-sm font-semibold text-slate-900">
+          <div class="hidden max-w-[180px] md:block">
+            <p class="truncate text-sm font-semibold text-slate-900">
               {{ user?.name }}
             </p>
 
-            <p class="text-xs text-slate-500">
+            <p class="truncate text-xs text-slate-500">
               {{ user?.role }}
             </p>
           </div>
@@ -85,7 +130,7 @@
       </div>
     </header>
 
-    <section class="p-5 lg:p-8">
+    <section class="min-w-0 p-4 sm:p-5 lg:p-8">
       <router-outlet></router-outlet>
     </section>
   </main>

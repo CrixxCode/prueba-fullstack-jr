@@ -10,5 +10,7 @@ public class UserResponseDto
 
     public string Role { get; set; } = string.Empty;
 
+    public string? AvatarUrl { get; set; }
+
     public bool IsActive { get; set; }
 }

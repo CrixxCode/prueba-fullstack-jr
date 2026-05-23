@@ -121,6 +121,10 @@ namespace backend.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<string>("AvatarPath")
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)

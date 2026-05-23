@@ -84,9 +84,10 @@ public class AuthAuditController : ApiControllerBase
 
         var sortedQuery = ApplySorting(query, queryDto.SortBy, queryDto.SortDir);
 
-        var logs = await sortedQuery
+        var logs = (await sortedQuery
             .Skip((page - 1) * size)
             .Take(size)
+            .ToListAsync())
             .Select(log => new AuthAuditLogResponseDto
             {
                 Id = log.Id,
@@ -97,9 +98,9 @@ public class AuthAuditController : ApiControllerBase
                 FailureReason = log.FailureReason,
                 IpAddress = log.IpAddress,
                 UserAgent = log.UserAgent,
-                CreatedAt = log.CreatedAt
+                CreatedAt = DateTime.SpecifyKind(log.CreatedAt, DateTimeKind.Utc)
             })
-            .ToListAsync();
+            .ToList();
 
         var response = new AuthAuditLogListResponseDto
         {

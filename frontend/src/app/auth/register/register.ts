@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
@@ -17,6 +17,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class Register {
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -47,8 +48,8 @@ export class Register {
       email: value.email ?? '',
       password: value.password ?? ''
     }).subscribe({
-      next: (response) => {
-        if (response.user.role === 'admin') {
+      next: () => {
+        if (this.authService.isAdmin()) {
           this.router.navigate(['/users']);
         } else {
           this.router.navigate(['/profile']);
@@ -57,9 +58,11 @@ export class Register {
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo registrar el usuario.';
         this.loading = false;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }

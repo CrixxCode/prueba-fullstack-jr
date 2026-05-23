@@ -12,6 +12,8 @@ public class User
 
     public string Role { get; set; } = "user";
 
+    public string? AvatarPath { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public int FailedLoginAttempts { get; set; }

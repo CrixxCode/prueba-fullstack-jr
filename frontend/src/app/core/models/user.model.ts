@@ -5,6 +5,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  avatarUrl?: string | null;
   isActive: boolean;
 }
 
@@ -26,6 +27,7 @@ export interface CreateUserRequest {
 
 export interface UpdateUserRequest {
   name: string;
+  email?: string | null;
   password?: string | null;
   role?: UserRole | null;
   isActive?: boolean | null;

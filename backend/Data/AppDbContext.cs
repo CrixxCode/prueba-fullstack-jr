@@ -40,6 +40,9 @@ public class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValue("user");
 
+            entity.Property(u => u.AvatarPath)
+                .HasMaxLength(260);
+
             entity.Property(u => u.IsActive)
                 .HasDefaultValue(true);
 

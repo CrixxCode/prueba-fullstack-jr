@@ -24,3 +24,5 @@
 /.tmp-pdf/
 
 frontend-history.bundle
+
+/backend/logs/

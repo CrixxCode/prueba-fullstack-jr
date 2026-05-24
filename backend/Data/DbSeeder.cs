@@ -103,7 +103,9 @@ public static class DbSeeder
                 IsActive = true,
                 FailedLoginAttempts = 0,
                 LockoutEndAt = null,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = null,
+                UpdatedBy = null
             });
 
             return SeedAction.Created;
@@ -161,6 +163,7 @@ public static class DbSeeder
         }
 
         user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = null;
         return SeedAction.Updated;
     }
 

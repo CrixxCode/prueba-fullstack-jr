@@ -54,6 +54,10 @@ public class AppDbContext : DbContext
             entity.Property(u => u.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
 
+            entity.Property(u => u.CreatedBy);
+
+            entity.Property(u => u.UpdatedBy);
+
             entity.HasMany(u => u.RefreshTokens)
                 .WithOne(rt => rt.User)
                 .HasForeignKey(rt => rt.UserId)

@@ -1,5 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  HostListener,
+  OnInit,
+  inject
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
 
@@ -285,6 +292,24 @@ export class Profile implements OnInit {
 
   get avatarLetter(): string {
     return this.currentUser?.name?.charAt(0)?.toUpperCase() || 'U';
+  }
+
+  @HostListener('document:keydown.escape')
+  handleEscape(): void {
+    if (this.uploadingAvatar) {
+      return;
+    }
+
+    if (this.deleteAvatarDialogOpen) {
+      this.cancelRemoveAvatar();
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (this.avatarModalOpen) {
+      this.closeAvatarModal();
+      this.cdr.markForCheck();
+    }
   }
 
   private applyUpdatedUser(updatedUser: User): void {

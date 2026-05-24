@@ -78,8 +78,10 @@ public class AuthController : ApiControllerBase
 
         var existsAnyUser = await _context.Users.AnyAsync();
 
+        var userId = Guid.NewGuid();
         var user = new User
         {
+            Id = userId,
             Email = normalizedEmail,
             Name = request.Name.Trim(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
@@ -87,7 +89,9 @@ public class AuthController : ApiControllerBase
             IsActive = true,
             FailedLoginAttempts = 0,
             LockoutEndAt = null,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = userId,
+            UpdatedBy = userId
         };
 
         _context.Users.Add(user);
@@ -113,6 +117,13 @@ public class AuthController : ApiControllerBase
         {
             return ConflictError("El correo ya esta registrado.");
         }
+
+        _logger.LogInformation(
+            "Usuario registrado exitosamente. UserId: {UserId}, Email: {Email}, Role: {Role}",
+            user.Id,
+            user.Email,
+            user.Role
+        );
 
         return Ok(BuildAuthResponse(user, refreshToken.Token));
     }
@@ -200,6 +211,8 @@ public class AuthController : ApiControllerBase
                 failureReason = "account_locked_after_failures";
             }
 
+            user.UpdatedAt = nowUtc;
+            user.UpdatedBy = user.Id;
             await _context.SaveChangesAsync();
 
             await WriteAuthAuditAsync(
@@ -241,6 +254,8 @@ public class AuthController : ApiControllerBase
 
         user.FailedLoginAttempts = 0;
         user.LockoutEndAt = null;
+        user.UpdatedAt = nowUtc;
+        user.UpdatedBy = user.Id;
 
         _context.RefreshTokens.Add(refreshTokenEntity);
         await _context.SaveChangesAsync();
@@ -249,6 +264,12 @@ public class AuthController : ApiControllerBase
             isSuccess: true,
             userId: user.Id,
             email: user.Email
+        );
+
+        _logger.LogInformation(
+            "Inicio de sesion exitoso. UserId: {UserId}, Email: {Email}",
+            user.Id,
+            user.Email
         );
 
         return Ok(BuildAuthResponse(user, refreshToken.Token));

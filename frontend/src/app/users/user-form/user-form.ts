@@ -1,5 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnInit, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  OnInit,
+  ViewChild,
+  inject
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -18,12 +27,22 @@ import {
   styleUrl: './user-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class UserForm implements OnInit {
+export class UserForm implements OnInit, AfterViewInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly fb = inject(FormBuilder);
   private readonly userService = inject(UserService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private returnFocusTarget: string | null = null;
+
+  @ViewChild('userFormDialog')
+  private userFormDialogRef?: ElementRef<HTMLElement>;
+
+  @ViewChild('userFormCloseButton')
+  private userFormCloseButtonRef?: ElementRef<HTMLButtonElement>;
+
+  @ViewChild('userFormNameInput')
+  private userFormNameInputRef?: ElementRef<HTMLInputElement>;
 
   userId: string | null = null;
   isEditMode = false;
@@ -45,6 +64,7 @@ export class UserForm implements OnInit {
   });
 
   ngOnInit(): void {
+    this.returnFocusTarget = this.readReturnFocusTarget();
     this.userId = this.route.snapshot.paramMap.get('id');
     this.isEditMode = !!this.userId;
 
@@ -57,6 +77,10 @@ export class UserForm implements OnInit {
       ]);
       this.form.controls.password.updateValueAndValidity();
     }
+  }
+
+  ngAfterViewInit(): void {
+    this.focusInitialControl();
   }
 
   loadUser(id: string): void {
@@ -81,6 +105,7 @@ export class UserForm implements OnInit {
       complete: () => {
         this.loading = false;
         this.cdr.markForCheck();
+        this.focusNameInput();
       }
     });
   }
@@ -119,7 +144,7 @@ export class UserForm implements OnInit {
           type: 'created',
           message: 'Usuario creado correctamente.'
         });
-        this.router.navigate(['/users']);
+        this.navigateBackWithFocusRestore();
       },
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo crear el usuario.';
@@ -146,7 +171,7 @@ export class UserForm implements OnInit {
       next: () => {
         this.successMessage = 'Usuario actualizado correctamente.';
         this.userService.notifyUsersChanged();
-        this.router.navigate(['/users']);
+        this.navigateBackWithFocusRestore();
       },
       error: (error) => {
         this.errorMessage = error?.error?.message || 'No se pudo actualizar el usuario.';
@@ -161,19 +186,111 @@ export class UserForm implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/users']);
+    this.navigateBackWithFocusRestore();
   }
 
   trackByRole(_: number, role: UserRole): UserRole {
     return role;
   }
 
-  @HostListener('document:keydown.escape')
-  handleEscape(): void {
-    if (this.saving) {
+  onDialogKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.saving) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.goBack();
       return;
     }
 
-    this.goBack();
+    if (event.key === 'Tab') {
+      this.trapFocus(event, this.userFormDialogRef?.nativeElement);
+    }
+  }
+
+  private navigateBackWithFocusRestore(): void {
+    const state = this.returnFocusTarget
+      ? { returnFocusTarget: this.returnFocusTarget }
+      : undefined;
+
+    this.router.navigate(['/users'], state ? { state } : undefined);
+  }
+
+  private focusInitialControl(): void {
+    setTimeout(() => {
+      if (this.loading) {
+        this.userFormCloseButtonRef?.nativeElement.focus();
+        return;
+      }
+
+      this.focusNameInput();
+    });
+  }
+
+  private focusNameInput(): void {
+    setTimeout(() => {
+      this.userFormNameInputRef?.nativeElement.focus();
+    });
+  }
+
+  private trapFocus(event: KeyboardEvent, container: HTMLElement | undefined): void {
+    if (!container) {
+      return;
+    }
+
+    const focusableElements = this.getFocusableElements(container);
+
+    if (!focusableElements.length) {
+      event.preventDefault();
+      container.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
+
+  private getFocusableElements(container: HTMLElement): HTMLElement[] {
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ];
+
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(focusableSelectors.join(','))
+    ).filter((element) =>
+      !element.hasAttribute('disabled') &&
+      element.getAttribute('aria-hidden') !== 'true'
+    );
+  }
+
+  private readReturnFocusTarget(): string | null {
+    const state = window.history.state as { returnFocusTarget?: unknown } | null;
+    const candidate = state?.returnFocusTarget;
+
+    if (typeof candidate !== 'string') {
+      return null;
+    }
+
+    const trimmed = candidate.trim();
+    return trimmed ? trimmed : null;
   }
 }

@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
 import {
+  AfterViewInit,
   ChangeDetectorRef,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   HostListener,
   OnInit,
+  ViewChild,
   inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -23,15 +26,26 @@ import { UserService } from '../../core/services/user.service';
   styleUrl: './user-list.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class UserList implements OnInit {
+export class UserList implements OnInit, AfterViewInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private focusRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private usersRequestSeq = 0;
   private detailRequestSeq = 0;
+  private pendingReturnFocusTarget: string | null = null;
+  private pendingReturnFocusAttempts = 0;
+  private readonly maxPendingReturnFocusAttempts = 20;
+  private lastFocusedElementBeforeDeleteModal: HTMLElement | null = null;
+
+  @ViewChild('deleteDialog')
+  private deleteDialogRef?: ElementRef<HTMLElement>;
+
+  @ViewChild('deleteCancelButton')
+  private deleteCancelButtonRef?: ElementRef<HTMLButtonElement>;
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -54,9 +68,12 @@ export class UserList implements OnInit {
   detailErrorMessage = '';
 
   ngOnInit(): void {
+    this.pendingReturnFocusTarget = this.readReturnFocusTarget();
+
     this.destroyRef.onDestroy(() => {
       this.clearToastTimer();
       this.clearSearchTimer();
+      this.clearFocusRetryTimer();
     });
 
     this.userService.usersChanged$
@@ -74,6 +91,10 @@ export class UserList implements OnInit {
       });
 
     this.loadUsers();
+  }
+
+  ngAfterViewInit(): void {
+    this.focusPendingReturnTarget();
   }
 
   loadUsers(): void {
@@ -113,6 +134,7 @@ export class UserList implements OnInit {
         }
 
         this.cdr.markForCheck();
+        this.focusPendingReturnTarget();
       },
       error: (error) => {
         if (requestId !== this.usersRequestSeq) {
@@ -210,15 +232,28 @@ export class UserList implements OnInit {
   }
 
   goToCreate(): void {
-    this.router.navigate(['/users/new']);
+    this.router.navigate(['/users/new'], {
+      state: {
+        returnFocusTarget: 'open-create-user'
+      }
+    });
   }
 
   goToEdit(id: string): void {
-    this.router.navigate(['/users', id, 'edit']);
+    this.router.navigate(['/users', id, 'edit'], {
+      state: {
+        returnFocusTarget: `user-row-${id}`
+      }
+    });
   }
 
-  requestDeleteUser(user: User): void {
+  requestDeleteUser(user: User, event?: Event): void {
+    this.lastFocusedElementBeforeDeleteModal = this.resolveEventFocusSource(event);
     this.userToDelete = user;
+
+    setTimeout(() => {
+      this.deleteCancelButtonRef?.nativeElement.focus();
+    });
   }
 
   cancelDelete(): void {
@@ -227,6 +262,7 @@ export class UserList implements OnInit {
     }
 
     this.userToDelete = null;
+    this.restoreFocusAfterDeleteModal();
   }
 
   confirmDelete(): void {
@@ -241,6 +277,7 @@ export class UserList implements OnInit {
     this.userService.deleteUser(user.id).subscribe({
       next: () => {
         this.userToDelete = null;
+        this.restoreFocusAfterDeleteModal();
 
         if (this.selectedUserId === user.id) {
           this.selectedUser = null;
@@ -292,6 +329,23 @@ export class UserList implements OnInit {
     return user.id;
   }
 
+  onDeleteDialogKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.deleting) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelDelete();
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      this.trapFocus(event, this.deleteDialogRef?.nativeElement);
+    }
+  }
+
   @HostListener('document:keydown.escape')
   handleEscape(): void {
     if (this.userToDelete && !this.deleting) {
@@ -330,5 +384,137 @@ export class UserList implements OnInit {
       clearTimeout(this.searchTimer);
       this.searchTimer = null;
     }
+  }
+
+  private trapFocus(event: KeyboardEvent, container: HTMLElement | undefined): void {
+    if (!container) {
+      return;
+    }
+
+    const focusableElements = this.getFocusableElements(container);
+
+    if (!focusableElements.length) {
+      event.preventDefault();
+      container.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
+
+  private getFocusableElements(container: HTMLElement): HTMLElement[] {
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ];
+
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(focusableSelectors.join(','))
+    ).filter((element) =>
+      !element.hasAttribute('disabled') &&
+      element.getAttribute('aria-hidden') !== 'true'
+    );
+  }
+
+  private resolveEventFocusSource(event?: Event): HTMLElement | null {
+    const target = event?.currentTarget;
+
+    if (target instanceof HTMLElement) {
+      return target;
+    }
+
+    const activeElement = document.activeElement;
+    return activeElement instanceof HTMLElement ? activeElement : null;
+  }
+
+  private restoreFocusAfterDeleteModal(): void {
+    const previousFocus = this.lastFocusedElementBeforeDeleteModal;
+    this.lastFocusedElementBeforeDeleteModal = null;
+
+    setTimeout(() => {
+      if (previousFocus && document.contains(previousFocus)) {
+        previousFocus.focus();
+        return;
+      }
+
+      const fallback = document.getElementById('user-search');
+      if (fallback instanceof HTMLElement) {
+        fallback.focus();
+      }
+    });
+  }
+
+  private focusPendingReturnTarget(): void {
+    if (!this.pendingReturnFocusTarget) {
+      return;
+    }
+
+    const selector = `[data-focus-id="${this.pendingReturnFocusTarget}"]`;
+    const target = document.querySelector(selector);
+
+    if (target instanceof HTMLElement) {
+      target.focus();
+      this.pendingReturnFocusTarget = null;
+      this.pendingReturnFocusAttempts = 0;
+      this.clearFocusRetryTimer();
+      return;
+    }
+
+    if (this.pendingReturnFocusAttempts >= this.maxPendingReturnFocusAttempts) {
+      this.pendingReturnFocusTarget = null;
+      this.pendingReturnFocusAttempts = 0;
+      this.clearFocusRetryTimer();
+
+      const fallback = document.getElementById('user-search');
+      if (fallback instanceof HTMLElement) {
+        fallback.focus();
+      }
+
+      return;
+    }
+
+    this.pendingReturnFocusAttempts++;
+
+    this.clearFocusRetryTimer();
+    this.focusRetryTimer = setTimeout(() => {
+      this.focusRetryTimer = null;
+      this.focusPendingReturnTarget();
+    }, 60);
+  }
+
+  private clearFocusRetryTimer(): void {
+    if (this.focusRetryTimer) {
+      clearTimeout(this.focusRetryTimer);
+      this.focusRetryTimer = null;
+    }
+  }
+
+  private readReturnFocusTarget(): string | null {
+    const state = window.history.state as { returnFocusTarget?: unknown } | null;
+    const candidate = state?.returnFocusTarget;
+
+    if (typeof candidate !== 'string') {
+      return null;
+    }
+
+    const trimmed = candidate.trim();
+    return trimmed ? trimmed : null;
   }
 }

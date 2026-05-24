@@ -193,6 +193,11 @@ Usuarios:
 Tambien puedes usar:
 - `backend/backend.http`
 
+### Postman
+
+Tambien puedes importar la coleccion versionada:
+- `backend/docs/postman/fullstack-jr-api.postman_collection.json`
+
 ## Pruebas automatizadas
 
 ### Frontend
@@ -337,10 +342,8 @@ Consulta de usuarios (solo admin):
 
 - CORS configurado para `http://localhost:4200` en desarrollo.
 - No hay `docker-compose` para levantar backend + frontend + SQL Server en un solo comando.
-- No hay coleccion Postman mantenida en el repo.
 
 ## Proximos pasos
 
-1. Versionar una coleccion Postman (`docs/postman/*.json`) con variables por ambiente.
-2. Parametrizar origenes CORS por entorno (`dev`, `staging`, `prod`).
-3. Agregar `docker-compose` para facilitar onboarding y pruebas locales.
+1. Parametrizar origenes CORS por entorno (`dev`, `staging`, `prod`).
+2. Agregar `docker-compose` para facilitar onboarding y pruebas locales.

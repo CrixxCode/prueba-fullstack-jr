@@ -32,16 +32,19 @@ public class UsersController : ApiControllerBase
     private readonly AppDbContext _context;
     private readonly AuthSecurityService _authSecurityService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<UsersController> _logger;
 
     public UsersController(
         AppDbContext context,
         AuthSecurityService authSecurityService,
-        IWebHostEnvironment environment
+        IWebHostEnvironment environment,
+        ILogger<UsersController> logger
     )
     {
         _context = context;
         _authSecurityService = authSecurityService;
         _environment = environment;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -154,6 +157,8 @@ public class UsersController : ApiControllerBase
         }
 
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var currentUserId = GetCurrentUserId();
+        var actorUserId = NormalizeActorUserId(currentUserId);
 
         var emailExists = await _context.Users
             .AnyAsync(u => u.Email == normalizedEmail);
@@ -172,7 +177,9 @@ public class UsersController : ApiControllerBase
             IsActive = request.IsActive,
             FailedLoginAttempts = 0,
             LockoutEndAt = null,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = actorUserId,
+            UpdatedBy = actorUserId
         };
 
         _context.Users.Add(user);
@@ -185,6 +192,13 @@ public class UsersController : ApiControllerBase
         {
             return ConflictError("El correo ya esta registrado.");
         }
+
+        _logger.LogInformation(
+            "Usuario creado. UserId: {UserId}, ActorUserId: {ActorUserId}, Role: {Role}",
+            user.Id,
+            actorUserId,
+            user.Role
+        );
 
         return CreatedAtAction(
             nameof(GetUserById),
@@ -274,6 +288,7 @@ public class UsersController : ApiControllerBase
         }
 
         user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = NormalizeActorUserId(currentUserId);
 
         try
         {
@@ -284,6 +299,13 @@ public class UsersController : ApiControllerBase
             return ConflictError("El correo ya esta registrado.");
         }
 
+        _logger.LogInformation(
+            "Usuario actualizado. UserId: {UserId}, ActorUserId: {ActorUserId}, IsAdminActor: {IsAdminActor}",
+            user.Id,
+            NormalizeActorUserId(currentUserId),
+            string.Equals(currentUserRole, "admin", StringComparison.OrdinalIgnoreCase)
+        );
+
         return Ok(BuildUserResponse(user));
     }
 
@@ -291,6 +313,8 @@ public class UsersController : ApiControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> DeleteUser(Guid id)
     {
+        var currentUserId = GetCurrentUserId();
+
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
 
         if (user == null)
@@ -303,6 +327,12 @@ public class UsersController : ApiControllerBase
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
         DeleteAvatarFileIfExists(avatarPath);
+
+        _logger.LogInformation(
+            "Usuario eliminado. DeletedUserId: {DeletedUserId}, ActorUserId: {ActorUserId}",
+            id,
+            NormalizeActorUserId(currentUserId)
+        );
 
         return Ok(new
         {
@@ -388,6 +418,7 @@ public class UsersController : ApiControllerBase
         var previousAvatarPath = user.AvatarPath;
         user.AvatarPath = relativeAvatarPath;
         user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = NormalizeActorUserId(currentUserId);
 
         try
         {
@@ -400,6 +431,13 @@ public class UsersController : ApiControllerBase
         }
 
         DeleteAvatarFileIfExists(previousAvatarPath);
+
+        _logger.LogInformation(
+            "Avatar cargado. UserId: {UserId}, ActorUserId: {ActorUserId}, AvatarPath: {AvatarPath}",
+            user.Id,
+            NormalizeActorUserId(currentUserId),
+            user.AvatarPath
+        );
 
         return Ok(BuildUserResponse(user));
     }
@@ -424,9 +462,16 @@ public class UsersController : ApiControllerBase
         var previousAvatarPath = user.AvatarPath;
         user.AvatarPath = null;
         user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = NormalizeActorUserId(currentUserId);
 
         await _context.SaveChangesAsync();
         DeleteAvatarFileIfExists(previousAvatarPath);
+
+        _logger.LogInformation(
+            "Avatar eliminado. UserId: {UserId}, ActorUserId: {ActorUserId}",
+            user.Id,
+            NormalizeActorUserId(currentUserId)
+        );
 
         return Ok(BuildUserResponse(user));
     }
@@ -454,6 +499,11 @@ public class UsersController : ApiControllerBase
     {
         return ex.InnerException is SqlException sqlException &&
                (sqlException.Number == 2601 || sqlException.Number == 2627);
+    }
+
+    private static Guid? NormalizeActorUserId(Guid currentUserId)
+    {
+        return currentUserId == Guid.Empty ? null : currentUserId;
     }
 
     private static string BuildPasswordPolicyMessage(

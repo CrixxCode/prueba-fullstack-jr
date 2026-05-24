@@ -40,7 +40,8 @@ internal static class ControllerFactory
         var controller = new UsersController(
             context,
             new AuthSecurityService(configuration),
-            new TestWebHostEnvironment()
+            new TestWebHostEnvironment(),
+            NullLogger<UsersController>.Instance
         );
 
         controller.ControllerContext = new ControllerContext

@@ -13,10 +13,36 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Context;
 
 DotEnvLoader.LoadDefaultLocations(Directory.GetCurrentDirectory());
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, loggerConfiguration) =>
+{
+    var logsDirectory = Path.Combine(
+        context.HostingEnvironment.ContentRootPath,
+        "logs"
+    );
+    Directory.CreateDirectory(logsDirectory);
+
+    loggerConfiguration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "FullStackJrApi")
+        .WriteTo.Console(
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{TraceId}] {Message:lj}{NewLine}{Exception}"
+        )
+        .WriteTo.File(
+            path: Path.Combine(logsDirectory, "backend-.log"),
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30,
+            shared: true,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{TraceId}] {SourceContext} {Message:lj}{NewLine}{Exception}"
+        );
+});
 
 builder.Services
     .AddControllers()
@@ -268,6 +294,27 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.Use(async (context, next) =>
+{
+    using (LogContext.PushProperty("TraceId", context.TraceIdentifier))
+    {
+        await next();
+    }
+});
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("TraceId", httpContext.TraceIdentifier);
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+    };
+
+    options.MessageTemplate =
+        "HTTP {RequestMethod} {RequestPath} => {StatusCode} en {Elapsed:0.0000} ms (TraceId: {TraceId})";
+});
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseHttpsRedirection();
@@ -285,7 +332,14 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+try
+{
+    app.Run();
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 static string BuildModelValidationMessage(Microsoft.AspNetCore.Mvc.ModelBinding.ModelError error)
 {

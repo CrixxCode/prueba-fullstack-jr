@@ -31,7 +31,7 @@ jobs:
         run: dotnet build backend/backend.csproj --configuration Release --no-restore
 
       - name: Test backend
-        run: dotnet test backend/backend.Tests/backend.Tests.csproj --configuration Release --no-build --verbosity normal
+        run: dotnet test backend/backend.Tests/backend.Tests.csproj --configuration Release --verbosity normal
 
   frontend:
     name: Frontend (Angular)

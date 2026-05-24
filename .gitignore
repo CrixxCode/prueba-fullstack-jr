@@ -11,6 +11,8 @@
 /backend/backend.Tests/bin/
 /backend/backend.Tests/obj/
 /backend/backend.Tests/.test-output/
+/backend/_buildcheck/
+/backend/uploads/
 
 # Frontend build
 /frontend/dist/

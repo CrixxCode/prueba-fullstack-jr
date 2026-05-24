@@ -1,4 +1,6 @@
 using System;
+using backend.Data;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,6 +8,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace backend.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260523234500_AddUserAuditActorFields")]
     public partial class AddUserAuditActorFields : Migration
     {
         /// <inheritdoc />

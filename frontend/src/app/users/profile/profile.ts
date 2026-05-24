@@ -3,8 +3,10 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   HostListener,
   OnInit,
+  ViewChild,
   inject
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -37,6 +39,8 @@ export class Profile implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly authService = inject(AuthService);
   private readonly userService = inject(UserService);
+  private lastFocusedElementBeforeAvatarModal: HTMLElement | null = null;
+  private lastFocusedElementBeforeDeleteAvatarDialog: HTMLElement | null = null;
 
   currentUser: User | null = null;
 
@@ -58,6 +62,21 @@ export class Profile implements OnInit {
     email: [{ value: '', disabled: true }, [Validators.required, Validators.email]],
     password: ['', [optionalStrongPasswordValidator()]]
   });
+
+  @ViewChild('avatarDialog')
+  private avatarDialogRef?: ElementRef<HTMLElement>;
+
+  @ViewChild('avatarFileInput')
+  private avatarFileInputRef?: ElementRef<HTMLInputElement>;
+
+  @ViewChild('avatarCancelButton')
+  private avatarCancelButtonRef?: ElementRef<HTMLButtonElement>;
+
+  @ViewChild('deleteAvatarDialog')
+  private deleteAvatarDialogRef?: ElementRef<HTMLElement>;
+
+  @ViewChild('deleteAvatarCancelButton')
+  private deleteAvatarCancelButtonRef?: ElementRef<HTMLButtonElement>;
 
   ngOnInit(): void {
     const storedUser = this.authService.getCurrentUser();
@@ -184,17 +203,25 @@ export class Profile implements OnInit {
     this.cdr.markForCheck();
   }
 
-  openAvatarModal(): void {
+  openAvatarModal(event?: Event): void {
     if (this.uploadingAvatar) {
       return;
     }
 
+    this.lastFocusedElementBeforeAvatarModal = this.resolveEventFocusSource(event);
     this.avatarModalOpen = true;
     this.avatarModalErrorMessage = '';
     this.selectedAvatarFile = null;
+
+    setTimeout(() => {
+      const initialTarget =
+        this.avatarFileInputRef?.nativeElement ??
+        this.avatarCancelButtonRef?.nativeElement;
+      initialTarget?.focus();
+    });
   }
 
-  closeAvatarModal(): void {
+  closeAvatarModal(options?: { restoreFocus?: boolean }): void {
     if (this.uploadingAvatar) {
       return;
     }
@@ -202,6 +229,10 @@ export class Profile implements OnInit {
     this.avatarModalOpen = false;
     this.avatarModalErrorMessage = '';
     this.selectedAvatarFile = null;
+
+    if (options?.restoreFocus ?? true) {
+      this.restoreFocusAfterAvatarModal();
+    }
   }
 
   submitAvatarUpload(): void {
@@ -234,8 +265,7 @@ export class Profile implements OnInit {
         next: (updatedUser) => {
           this.applyUpdatedUser(updatedUser);
           this.successMessage = 'Avatar actualizado correctamente.';
-          this.avatarModalOpen = false;
-          this.selectedAvatarFile = null;
+          this.closeAvatarModal();
         },
         error: (error) => {
           this.avatarModalErrorMessage = error?.error?.message || 'No se pudo cargar el avatar.';
@@ -244,20 +274,29 @@ export class Profile implements OnInit {
       });
   }
 
-  requestRemoveAvatar(): void {
+  requestRemoveAvatar(event?: Event): void {
     if (!this.currentUser || this.uploadingAvatar) {
       return;
     }
 
+    this.lastFocusedElementBeforeDeleteAvatarDialog = this.resolveEventFocusSource(event);
     this.deleteAvatarDialogOpen = true;
+
+    setTimeout(() => {
+      this.deleteAvatarCancelButtonRef?.nativeElement.focus();
+    });
   }
 
-  cancelRemoveAvatar(): void {
+  cancelRemoveAvatar(options?: { restoreFocus?: boolean }): void {
     if (this.uploadingAvatar) {
       return;
     }
 
     this.deleteAvatarDialogOpen = false;
+
+    if (options?.restoreFocus ?? true) {
+      this.restoreFocusAfterDeleteAvatarDialog();
+    }
   }
 
   removeAvatar(): void {
@@ -281,13 +320,47 @@ export class Profile implements OnInit {
         next: (updatedUser) => {
           this.applyUpdatedUser(updatedUser);
           this.successMessage = 'Avatar eliminado correctamente.';
-          this.deleteAvatarDialogOpen = false;
+          this.cancelRemoveAvatar();
         },
         error: (error) => {
           this.errorMessage = error?.error?.message || 'No se pudo eliminar el avatar.';
           this.cdr.markForCheck();
         }
       });
+  }
+
+  onAvatarModalKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.uploadingAvatar) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeAvatarModal();
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      this.trapFocus(event, this.avatarDialogRef?.nativeElement);
+    }
+  }
+
+  onDeleteAvatarDialogKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.uploadingAvatar) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelRemoveAvatar();
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      this.trapFocus(event, this.deleteAvatarDialogRef?.nativeElement);
+    }
   }
 
   get avatarLetter(): string {
@@ -310,6 +383,100 @@ export class Profile implements OnInit {
       this.closeAvatarModal();
       this.cdr.markForCheck();
     }
+  }
+
+  private trapFocus(event: KeyboardEvent, container: HTMLElement | undefined): void {
+    if (!container) {
+      return;
+    }
+
+    const focusableElements = this.getFocusableElements(container);
+
+    if (!focusableElements.length) {
+      event.preventDefault();
+      container.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
+
+  private getFocusableElements(container: HTMLElement): HTMLElement[] {
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ];
+
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(focusableSelectors.join(','))
+    ).filter((element) =>
+      !element.hasAttribute('disabled') &&
+      element.getAttribute('aria-hidden') !== 'true'
+    );
+  }
+
+  private resolveEventFocusSource(event?: Event): HTMLElement | null {
+    const target = event?.currentTarget;
+
+    if (target instanceof HTMLElement) {
+      return target;
+    }
+
+    const activeElement = document.activeElement;
+    return activeElement instanceof HTMLElement ? activeElement : null;
+  }
+
+  private restoreFocusAfterAvatarModal(): void {
+    const previousFocus = this.lastFocusedElementBeforeAvatarModal;
+    this.lastFocusedElementBeforeAvatarModal = null;
+
+    setTimeout(() => {
+      if (previousFocus && document.contains(previousFocus)) {
+        previousFocus.focus();
+        return;
+      }
+
+      const fallback = document.querySelector<HTMLElement>('[data-focus-id="open-avatar-modal"]');
+      fallback?.focus();
+    });
+  }
+
+  private restoreFocusAfterDeleteAvatarDialog(): void {
+    const previousFocus = this.lastFocusedElementBeforeDeleteAvatarDialog;
+    this.lastFocusedElementBeforeDeleteAvatarDialog = null;
+
+    setTimeout(() => {
+      if (previousFocus && document.contains(previousFocus)) {
+        previousFocus.focus();
+        return;
+      }
+
+      const fallback = document.querySelector<HTMLElement>('[data-focus-id="open-remove-avatar-dialog"]');
+      if (fallback) {
+        fallback.focus();
+        return;
+      }
+
+      const avatarFallback = document.querySelector<HTMLElement>('[data-focus-id="open-avatar-modal"]');
+      avatarFallback?.focus();
+    });
   }
 
   private applyUpdatedUser(updatedUser: User): void {

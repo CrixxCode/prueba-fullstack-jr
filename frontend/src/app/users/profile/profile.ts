@@ -221,8 +221,8 @@ export class Profile implements OnInit {
     });
   }
 
-  closeAvatarModal(options?: { restoreFocus?: boolean }): void {
-    if (this.uploadingAvatar) {
+  closeAvatarModal(options?: { restoreFocus?: boolean; force?: boolean }): void {
+    if (this.uploadingAvatar && !options?.force) {
       return;
     }
 
@@ -265,7 +265,7 @@ export class Profile implements OnInit {
         next: (updatedUser) => {
           this.applyUpdatedUser(updatedUser);
           this.successMessage = 'Avatar actualizado correctamente.';
-          this.closeAvatarModal();
+          this.closeAvatarModal({ force: true });
         },
         error: (error) => {
           this.avatarModalErrorMessage = error?.error?.message || 'No se pudo cargar el avatar.';
@@ -287,8 +287,8 @@ export class Profile implements OnInit {
     });
   }
 
-  cancelRemoveAvatar(options?: { restoreFocus?: boolean }): void {
-    if (this.uploadingAvatar) {
+  cancelRemoveAvatar(options?: { restoreFocus?: boolean; force?: boolean }): void {
+    if (this.uploadingAvatar && !options?.force) {
       return;
     }
 
@@ -320,7 +320,7 @@ export class Profile implements OnInit {
         next: (updatedUser) => {
           this.applyUpdatedUser(updatedUser);
           this.successMessage = 'Avatar eliminado correctamente.';
-          this.cancelRemoveAvatar();
+          this.cancelRemoveAvatar({ force: true });
         },
         error: (error) => {
           this.errorMessage = error?.error?.message || 'No se pudo eliminar el avatar.';

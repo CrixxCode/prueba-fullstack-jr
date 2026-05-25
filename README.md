@@ -398,6 +398,22 @@ Consulta de usuarios (solo admin):
 - `sortBy` soportado: `createdAt`, `email`, `name`, `role`, `isActive`
 - `sortDir`: `asc` o `desc`
 
+## Limitaciones
+
+- Alcance orientado a entorno local de desarrollo; no incluye configuracion productiva (WAF, secretos gestionados, observabilidad centralizada, hardening de infraestructura).
+- CORS configurado para `http://localhost:4200`; para otros origenes se requiere ajuste explicito en backend.
+- Almacenamiento de avatar en disco local (`backend/uploads`); no se integra almacenamiento externo (S3, Azure Blob, CDN).
+- No se incluye pipeline CI/CD con despliegue automatico; solo comandos de build/test y validacion local.
+- No se implementa recuperacion de contrasena por correo ni verificacion de email.
+
+## Proximos pasos
+
+- Externalizar configuracion por ambiente (Development/Staging/Production) y secretos en un proveedor seguro.
+- Agregar pipeline CI/CD (build, tests, analisis estatico, migraciones controladas y despliegue).
+- Migrar archivos de avatar a almacenamiento externo con versionado y politicas de retencion.
+- Incorporar flujos de seguridad adicionales: recuperacion de contrasena, verificacion de correo y rotacion de refresh tokens por dispositivo.
+- Expandir observabilidad con metricas, trazas distribuidas y alertas operativas.
+
 ## Solucion de problemas rapida
 
 - Error `JWT Key is missing or insecure`:
@@ -411,14 +427,3 @@ Consulta de usuarios (solo admin):
   - Si el refresh falla, volver a iniciar sesion.
 - Error `403`:
   - Accion restringida por rol o por propiedad del recurso.
-
-## Limitaciones conocidas
-
-- CORS configurado para `http://localhost:4200` en desarrollo.
-- El frontend usa `API_URL` fija en `http://localhost:5241/api` (`frontend/src/app/core/api.config.ts`).
-
-## Proximos pasos
-
-1. Parametrizar origenes CORS por entorno (`dev`, `staging`, `prod`).
-2. Parametrizar `API_URL` del frontend por entorno.
-3. Agregar perfil de produccion para Docker Compose (frontend estatico + reverse proxy).

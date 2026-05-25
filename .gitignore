@@ -3,6 +3,7 @@
 /backend/.env
 /frontend/.env
 /frontend/.env.local
+/.env.docker
 
 # Backend build
 /backend/bin/

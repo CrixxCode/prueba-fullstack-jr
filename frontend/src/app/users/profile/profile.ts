@@ -59,7 +59,7 @@ export class Profile implements OnInit {
 
   form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(3)]],
-    email: [{ value: '', disabled: true }, [Validators.required, Validators.email]],
+    email: ['', [Validators.required, Validators.email]],
     password: ['', [optionalStrongPasswordValidator()]]
   });
 
@@ -153,6 +153,7 @@ export class Profile implements OnInit {
 
     this.userService.updateUser(this.currentUser.id, {
       name: value.name ?? '',
+      email: value.email ?? '',
       password: value.password?.trim() ? value.password : null
     }).subscribe({
       next: (updatedUser) => {

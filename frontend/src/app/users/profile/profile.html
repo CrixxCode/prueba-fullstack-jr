@@ -177,10 +177,14 @@
               Correo electronico
             </label>
 
-            <input type="email" formControlName="email" class="h-12 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500 outline-none" />
+            <input type="email" formControlName="email" [readonly]="!editMode" [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 read-only:bg-slate-50 read-only:text-slate-500" />
 
             <p class="mt-2 text-xs text-slate-400">
-              El correo no se edita desde esta vista.
+              Usa un correo valido para guardar cambios.
+            </p>
+
+            <p *ngIf="form.controls.email.touched && form.controls.email.invalid" class="mt-1 text-xs text-red-600">
+              Debes ingresar un correo electronico valido.
             </p>
           </div>
 

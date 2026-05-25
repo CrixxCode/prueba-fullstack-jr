@@ -1,0 +1,66 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fullstackjr-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "(/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\") > /dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fullstackjr-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5241
+      ConnectionStrings__DefaultConnection: Server=db,1433;Database=FullStackJrDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True;Encrypt=False;
+      Jwt__Key: ${JWT_KEY:-LocalDevJwtKeyForDockerOnly_1234567890!}
+      Jwt__Issuer: FullStackJrApi
+      Jwt__Audience: FullStackJrClient
+      Jwt__ExpiresInMinutes: 60
+      Jwt__RefreshTokenExpiresInDays: 7
+      Security__PasswordMinLength: 8
+      Security__MaxFailedLoginAttempts: 5
+      Security__LockoutMinutes: 15
+    ports:
+      - "5241:5241"
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_logs:/app/logs
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fullstackjr-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "4200:4200"
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+  backend_uploads:
+  backend_logs:

@@ -20,6 +20,16 @@ export const routes: Routes = [
       import('./auth/register/register').then((m) => m.Register)
   },
   {
+    path: '403',
+    loadComponent: () =>
+      import('./errors/forbidden/forbidden').then((m) => m.Forbidden)
+  },
+  {
+    path: '404',
+    loadComponent: () =>
+      import('./errors/not-found/not-found').then((m) => m.NotFound)
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./shared/admin-layout/admin-layout').then((m) => m.AdminLayout),
@@ -58,6 +68,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'login'
+    redirectTo: '404'
   }
 ];

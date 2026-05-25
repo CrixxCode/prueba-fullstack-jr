@@ -11,7 +11,7 @@ Aplicacion de autenticacion y CRUD de usuarios con:
 ```text
 prueba-fullstack-jr/
 |- backend/
-|- backend.Tests/
+|  |- backend.Tests/
 |- frontend/
 ```
 
@@ -30,6 +30,7 @@ prueba-fullstack-jr/
 - npm
 - Angular CLI
 - dotnet-ef
+- Docker Desktop (opcional, para usar `docker compose`)
 
 Instalar herramientas si hacen falta:
 
@@ -132,6 +133,50 @@ El frontend consume:
 
 Si cambias el puerto del backend, actualiza:
 - `frontend/src/app/core/api.config.ts`
+
+## Ejecucion con Docker Compose
+
+Puedes levantar `SQL Server + backend + frontend` con un solo comando desde la raiz del repo.
+
+Requisito:
+- Docker Desktop encendido (daemon Linux activo).
+
+1. (Opcional) Personalizar variables para Docker:
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+```
+
+2. Levantar servicios:
+
+```powershell
+docker compose --env-file .env.docker up --build
+```
+
+Si prefieres ejecutarlo en segundo plano:
+
+```powershell
+docker compose --env-file .env.docker up -d --build
+```
+
+Si no pasas `--env-file`, Compose usa los valores por defecto definidos en `docker-compose.yml`.
+
+URLs:
+- Frontend: `http://localhost:4200`
+- Backend API: `http://localhost:5241`
+- Swagger: `http://localhost:5241/swagger`
+
+Para detener y limpiar contenedores/red:
+
+```powershell
+docker compose --env-file .env.docker down
+```
+
+Para ver logs:
+
+```powershell
+docker compose logs -f backend frontend db
+```
 
 ## Optimizaciones frontend (Lighthouse)
 
@@ -237,7 +282,7 @@ Estado actual esperado:
 Desde la raiz del repo:
 
 ```powershell
-dotnet test backend.Tests\backend.Tests.csproj
+dotnet test backend\backend.Tests\backend.Tests.csproj
 ```
 
 Estado actual esperado:
@@ -245,7 +290,7 @@ Estado actual esperado:
 
 ## Estado de verificacion final
 
-Verificacion realizada el **21 de mayo de 2026** (America/Bogota).
+Verificacion realizada el **25 de mayo de 2026** (America/Bogota).
 
 Comandos ejecutados y resultado:
 
@@ -260,10 +305,10 @@ Resultado: compilacion correcta, 0 errores.
 2. Backend tests
 
 ```powershell
-dotnet test backend.Tests\backend.Tests.csproj
+dotnet test backend\backend.Tests\backend.Tests.csproj
 ```
 
-Resultado: el total de pruebas superadas depende de la version actual de la suite.
+Resultado: `27` pruebas superadas.
 
 3. Frontend build
 
@@ -281,7 +326,15 @@ cd frontend
 npm test -- --watch=false --browsers=ChromeHeadless
 ```
 
-Resultado: el total de pruebas superadas depende de la version actual de la suite.
+Resultado: `24` pruebas superadas.
+
+5. Docker Compose (validacion de configuracion)
+
+```powershell
+docker compose config
+```
+
+Resultado: archivo `docker-compose.yml` valido.
 
 ## Reglas de autorizacion implementadas
 
@@ -362,9 +415,10 @@ Consulta de usuarios (solo admin):
 ## Limitaciones conocidas
 
 - CORS configurado para `http://localhost:4200` en desarrollo.
-- No hay `docker-compose` para levantar backend + frontend + SQL Server en un solo comando.
+- El frontend usa `API_URL` fija en `http://localhost:5241/api` (`frontend/src/app/core/api.config.ts`).
 
 ## Proximos pasos
 
 1. Parametrizar origenes CORS por entorno (`dev`, `staging`, `prod`).
-2. Agregar `docker-compose` para facilitar onboarding y pruebas locales.
+2. Parametrizar `API_URL` del frontend por entorno.
+3. Agregar perfil de produccion para Docker Compose (frontend estatico + reverse proxy).

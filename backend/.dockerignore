@@ -1,0 +1,7 @@
+bin/
+obj/
+backend.Tests/
+uploads/
+logs/
+_buildcheck/
+.env

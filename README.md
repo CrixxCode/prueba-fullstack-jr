@@ -170,6 +170,27 @@ Usuarios:
 - `POST /api/users/{id}/avatar` (admin o dueno, multipart/form-data)
 - `DELETE /api/users/{id}/avatar` (admin o dueno)
 
+## Patron de servicios (`AppServiceResult`)
+
+La capa de aplicacion (`AuthAppService`, `UserAppService`) usa un contrato uniforme:
+- `AppServiceResult<T>` para exponer resultado de negocio.
+- `IsSuccess=true` con `Data`.
+- `IsSuccess=false` con `Error` (`Type`, `Code`, `Message`).
+
+Tipos de error estandar:
+- `BadRequest`
+- `Unauthorized`
+- `Forbidden`
+- `NotFound`
+- `Conflict`
+
+Los controladores traducen este resultado a HTTP:
+- `BadRequest` -> `400`
+- `Unauthorized` -> `401`
+- `Forbidden` -> `403`
+- `NotFound` -> `404`
+- `Conflict` -> `409`
+
 ## Avatar de usuario
 
 - Almacenamiento local: `backend/uploads/avatars/`.
@@ -209,7 +230,7 @@ npm test -- --watch=false --browsers=ChromeHeadless
 ```
 
 Estado actual esperado:
-- `TOTAL: 5 SUCCESS`
+- el total puede variar segun la suite y la version del frontend.
 
 ### Backend
 
@@ -220,7 +241,7 @@ dotnet test backend.Tests\backend.Tests.csproj
 ```
 
 Estado actual esperado:
-- `Superado: 3, Con error: 0`
+- el total de pruebas puede variar segun la suite vigente.
 
 ## Estado de verificacion final
 
@@ -242,7 +263,7 @@ Resultado: compilacion correcta, 0 errores.
 dotnet test backend.Tests\backend.Tests.csproj
 ```
 
-Resultado: `Superado: 3, Con error: 0`.
+Resultado: el total de pruebas superadas depende de la version actual de la suite.
 
 3. Frontend build
 
@@ -260,7 +281,7 @@ cd frontend
 npm test -- --watch=false --browsers=ChromeHeadless
 ```
 
-Resultado: `TOTAL: 5 SUCCESS`.
+Resultado: el total de pruebas superadas depende de la version actual de la suite.
 
 ## Reglas de autorizacion implementadas
 

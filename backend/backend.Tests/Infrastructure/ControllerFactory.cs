@@ -2,6 +2,9 @@ using System.Net;
 using System.Security.Claims;
 using backend.Controllers;
 using backend.Data;
+using backend.Factories;
+using backend.Mappers;
+using backend.Repositories;
 using backend.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -14,12 +17,22 @@ internal static class ControllerFactory
     public static AuthController CreateAuthController(AppDbContext context)
     {
         var configuration = TestConfiguration.Build();
-        var controller = new AuthController(
+        var authAppService = new AuthAppService(
             context,
+            new UserRepository(context),
+            new RefreshTokenRepository(context),
             new TokenService(configuration),
             new RefreshTokenService(configuration),
             new AuthSecurityService(configuration),
-            NullLogger<AuthController>.Instance
+            new UserFactory(),
+            new RefreshTokenFactory(),
+            new AuthAuditLogFactory(),
+            new AuthResponseMapper(new UserResponseMapper()),
+            NullLogger<AuthAppService>.Instance
+        );
+
+        var controller = new AuthController(
+            authAppService
         );
 
         controller.ControllerContext = new ControllerContext
@@ -37,11 +50,18 @@ internal static class ControllerFactory
     )
     {
         var configuration = TestConfiguration.Build();
-        var controller = new UsersController(
+        var userAppService = new UserAppService(
             context,
+            new UserRepository(context),
+            new UserFactory(),
+            new UserResponseMapper(),
+            new AvatarStorageService(new TestWebHostEnvironment()),
             new AuthSecurityService(configuration),
-            new TestWebHostEnvironment(),
-            NullLogger<UsersController>.Instance
+            NullLogger<UserAppService>.Instance
+        );
+
+        var controller = new UsersController(
+            userAppService
         );
 
         controller.ControllerContext = new ControllerContext

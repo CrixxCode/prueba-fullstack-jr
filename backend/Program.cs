@@ -4,7 +4,10 @@ using System.Threading.RateLimiting;
 using backend.Common;
 using backend.Configuration;
 using backend.Data;
+using backend.Factories;
+using backend.Mappers;
 using backend.Middleware;
+using backend.Repositories;
 using backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -78,6 +81,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<AuthSecurityService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IUserFactory, UserFactory>();
+builder.Services.AddScoped<IRefreshTokenFactory, RefreshTokenFactory>();
+builder.Services.AddScoped<IAuthAuditLogFactory, AuthAuditLogFactory>();
+builder.Services.AddScoped<IUserResponseMapper, UserResponseMapper>();
+builder.Services.AddScoped<IAuthResponseMapper, AuthResponseMapper>();
+builder.Services.AddScoped<IAvatarStorageService, AvatarStorageService>();
+builder.Services.AddScoped<IAuthAppService, AuthAppService>();
+builder.Services.AddScoped<IUserAppService, UserAppService>();
 
 builder.Services.AddRateLimiter(options =>
 {

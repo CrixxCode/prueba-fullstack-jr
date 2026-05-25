@@ -1,12 +1,7 @@
-using System.Data;
-using backend.Data;
 using backend.DTOs;
-using backend.Models;
 using backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 
 namespace backend.Controllers;
 
@@ -15,528 +10,93 @@ namespace backend.Controllers;
 [EnableRateLimiting("auth")]
 public class AuthController : ApiControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly TokenService _tokenService;
-    private readonly RefreshTokenService _refreshTokenService;
-    private readonly AuthSecurityService _authSecurityService;
-    private readonly ILogger<AuthController> _logger;
+    private readonly IAuthAppService _authAppService;
 
-    public AuthController(
-        AppDbContext context,
-        TokenService tokenService,
-        RefreshTokenService refreshTokenService,
-        AuthSecurityService authSecurityService,
-        ILogger<AuthController> logger
-    )
+    public AuthController(IAuthAppService authAppService)
     {
-        _context = context;
-        _tokenService = tokenService;
-        _refreshTokenService = refreshTokenService;
-        _authSecurityService = authSecurityService;
-        _logger = logger;
+        _authAppService = authAppService;
     }
 
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
-        if (request is null)
-        {
-            return BadRequestError("El cuerpo de la solicitud es obligatorio.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.Password) ||
-            string.IsNullOrWhiteSpace(request.Name))
-        {
-            return BadRequestError(
-                "Email, contrasena y nombre son obligatorios.",
-                code: "validation_error"
-            );
-        }
-
-        var passwordErrors = _authSecurityService.ValidatePassword(request.Password);
-        if (passwordErrors.Count > 0)
-        {
-            return BadRequestError(
-                BuildPasswordPolicyMessage(passwordErrors),
-                code: "validation_error"
-            );
-        }
-
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-        await using var transaction = await _context.Database
-            .BeginTransactionAsync(IsolationLevel.Serializable);
-
-        var emailExists = await _context.Users
-            .AnyAsync(u => u.Email == normalizedEmail);
-
-        if (emailExists)
-        {
-            return ConflictError("El correo ya esta registrado.");
-        }
-
-        var existsAnyUser = await _context.Users.AnyAsync();
-
-        var userId = Guid.NewGuid();
-        var user = new User
-        {
-            Id = userId,
-            Email = normalizedEmail,
-            Name = request.Name.Trim(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = existsAnyUser ? "user" : "admin",
-            IsActive = true,
-            FailedLoginAttempts = 0,
-            LockoutEndAt = null,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = userId,
-            UpdatedBy = userId
-        };
-
-        _context.Users.Add(user);
-        var refreshToken = _refreshTokenService.CreateToken();
-
-        try
-        {
-            await _context.SaveChangesAsync();
-
-            var refreshTokenEntity = new RefreshToken
-            {
-                UserId = user.Id,
-                TokenHash = refreshToken.TokenHash,
-                ExpiresAt = refreshToken.ExpiresAt,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.RefreshTokens.Add(refreshTokenEntity);
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-        catch (DbUpdateException ex) when (IsUniqueEmailViolation(ex))
-        {
-            return ConflictError("El correo ya esta registrado.");
-        }
-
-        _logger.LogInformation(
-            "Usuario registrado exitosamente. UserId: {UserId}, Email: {Email}, Role: {Role}",
-            user.Id,
-            user.Email,
-            user.Role
+        var result = await _authAppService.RegisterAsync(
+            request,
+            BuildRequestContext(),
+            HttpContext.RequestAborted
         );
 
-        return Ok(BuildAuthResponse(user, refreshToken.Token));
+        return ToActionResult(result);
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
-        if (request is null)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                failureReason: "request_body_missing"
-            );
-            return BadRequestError("El cuerpo de la solicitud es obligatorio.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.Password))
-        {
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                email: request.Email,
-                failureReason: "missing_credentials"
-            );
-            return BadRequestError(
-                "Email y contrasena son obligatorios.",
-                code: "validation_error"
-            );
-        }
-
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
-
-        if (user == null)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                email: normalizedEmail,
-                failureReason: "invalid_credentials"
-            );
-            return UnauthorizedError("Credenciales incorrectas.");
-        }
-
-        var nowUtc = DateTime.UtcNow;
-
-        if (user.LockoutEndAt.HasValue && user.LockoutEndAt.Value > nowUtc)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                userId: user.Id,
-                email: user.Email,
-                failureReason: "account_locked"
-            );
-
-            return UnauthorizedError("Cuenta bloqueada temporalmente por intentos fallidos.");
-        }
-
-        if (user.LockoutEndAt.HasValue && user.LockoutEndAt.Value <= nowUtc)
-        {
-            user.LockoutEndAt = null;
-            user.FailedLoginAttempts = 0;
-        }
-
-        var passwordIsValid = BCrypt.Net.BCrypt.Verify(
-            request.Password,
-            user.PasswordHash
+        var result = await _authAppService.LoginAsync(
+            request,
+            BuildRequestContext(),
+            HttpContext.RequestAborted
         );
 
-        if (!passwordIsValid)
-        {
-            user.FailedLoginAttempts += 1;
-
-            var failureReason = "invalid_credentials";
-
-            if (user.FailedLoginAttempts >= _authSecurityService.MaxFailedLoginAttempts)
-            {
-                user.LockoutEndAt = nowUtc.Add(_authSecurityService.LockoutDuration);
-                user.FailedLoginAttempts = 0;
-                failureReason = "account_locked_after_failures";
-            }
-
-            user.UpdatedAt = nowUtc;
-            user.UpdatedBy = user.Id;
-            await _context.SaveChangesAsync();
-
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                userId: user.Id,
-                email: user.Email,
-                failureReason: failureReason
-            );
-
-            if (failureReason == "account_locked_after_failures")
-            {
-                return UnauthorizedError("Cuenta bloqueada temporalmente por intentos fallidos.");
-            }
-
-            return UnauthorizedError("Credenciales incorrectas.");
-        }
-
-        if (!user.IsActive)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "login_failed",
-                isSuccess: false,
-                userId: user.Id,
-                email: user.Email,
-                failureReason: "inactive_user"
-            );
-            return UnauthorizedError("El usuario esta inactivo.");
-        }
-
-        var refreshToken = _refreshTokenService.CreateToken();
-        var refreshTokenEntity = new RefreshToken
-        {
-            UserId = user.Id,
-            TokenHash = refreshToken.TokenHash,
-            ExpiresAt = refreshToken.ExpiresAt,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        user.FailedLoginAttempts = 0;
-        user.LockoutEndAt = null;
-        user.UpdatedAt = nowUtc;
-        user.UpdatedBy = user.Id;
-
-        _context.RefreshTokens.Add(refreshTokenEntity);
-        await _context.SaveChangesAsync();
-        await WriteAuthAuditAsync(
-            eventType: "login_success",
-            isSuccess: true,
-            userId: user.Id,
-            email: user.Email
-        );
-
-        _logger.LogInformation(
-            "Inicio de sesion exitoso. UserId: {UserId}, Email: {Email}",
-            user.Id,
-            user.Email
-        );
-
-        return Ok(BuildAuthResponse(user, refreshToken.Token));
+        return ToActionResult(result);
     }
 
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken))
-        {
-            await WriteAuthAuditAsync(
-                eventType: "refresh_failed",
-                isSuccess: false,
-                failureReason: "missing_refresh_token"
-            );
-            return BadRequestError(
-                "Refresh token es obligatorio.",
-                code: "validation_error"
-            );
-        }
-
-        var refreshTokenHash = _refreshTokenService.ComputeHash(request.RefreshToken.Trim());
-
-        var existingToken = await _context.RefreshTokens
-            .AsNoTracking()
-            .Include(rt => rt.User)
-            .FirstOrDefaultAsync(rt => rt.TokenHash == refreshTokenHash);
-
-        if (existingToken is null || existingToken.User is null)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "refresh_failed",
-                isSuccess: false,
-                failureReason: "invalid_refresh_token"
-            );
-            return UnauthorizedError("Refresh token invalido.");
-        }
-
-        if (!existingToken.IsActive)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "refresh_failed",
-                isSuccess: false,
-                userId: existingToken.UserId,
-                email: existingToken.User.Email,
-                failureReason: "refresh_token_inactive"
-            );
-            return UnauthorizedError("Refresh token invalido o expirado.");
-        }
-
-        if (!existingToken.User.IsActive)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "refresh_failed",
-                isSuccess: false,
-                userId: existingToken.UserId,
-                email: existingToken.User.Email,
-                failureReason: "inactive_user"
-            );
-            return UnauthorizedError("El usuario esta inactivo.");
-        }
-
-        var newRefreshToken = _refreshTokenService.CreateToken();
-        var nowUtc = DateTime.UtcNow;
-
-        await using var transaction = await _context.Database
-            .BeginTransactionAsync(IsolationLevel.ReadCommitted);
-
-        var revokedRows = await _context.RefreshTokens
-            .Where(rt =>
-                rt.Id == existingToken.Id &&
-                rt.RevokedAt == null &&
-                rt.ExpiresAt > nowUtc
-            )
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(rt => rt.RevokedAt, nowUtc)
-                .SetProperty(rt => rt.ReplacedByTokenHash, newRefreshToken.TokenHash)
-            );
-
-        if (revokedRows == 0)
-        {
-            await transaction.RollbackAsync();
-            await WriteAuthAuditAsync(
-                eventType: "refresh_failed",
-                isSuccess: false,
-                userId: existingToken.UserId,
-                email: existingToken.User.Email,
-                failureReason: "refresh_token_replayed_or_inactive"
-            );
-            return UnauthorizedError("Refresh token invalido o expirado.");
-        }
-
-        _context.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = existingToken.UserId,
-            TokenHash = newRefreshToken.TokenHash,
-            ExpiresAt = newRefreshToken.ExpiresAt,
-            CreatedAt = nowUtc
-        });
-
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
-        await WriteAuthAuditAsync(
-            eventType: "refresh_success",
-            isSuccess: true,
-            userId: existingToken.UserId,
-            email: existingToken.User.Email
+        var result = await _authAppService.RefreshAsync(
+            request,
+            BuildRequestContext(),
+            HttpContext.RequestAborted
         );
 
-        return Ok(BuildAuthResponse(existingToken.User, newRefreshToken.Token));
+        return ToActionResult(result);
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] LogoutRequestDto request)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken))
-        {
-            await WriteAuthAuditAsync(
-                eventType: "logout_failed",
-                isSuccess: false,
-                failureReason: "missing_refresh_token"
-            );
-            return BadRequestError(
-                "Refresh token es obligatorio.",
-                code: "validation_error"
-            );
-        }
+        var result = await _authAppService.LogoutAsync(
+            request,
+            BuildRequestContext(),
+            HttpContext.RequestAborted
+        );
 
-        var refreshTokenHash = _refreshTokenService.ComputeHash(request.RefreshToken.Trim());
-
-        var existingToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.TokenHash == refreshTokenHash);
-
-        if (existingToken is null)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "logout_failed",
-                isSuccess: false,
-                failureReason: "invalid_refresh_token"
-            );
-        }
-        else if (existingToken.IsRevoked)
-        {
-            await WriteAuthAuditAsync(
-                eventType: "logout_failed",
-                isSuccess: false,
-                userId: existingToken.UserId,
-                failureReason: "refresh_token_already_revoked"
-            );
-        }
-        else
-        {
-            existingToken.RevokedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-            await WriteAuthAuditAsync(
-                eventType: "logout_success",
-                isSuccess: true,
-                userId: existingToken.UserId
-            );
-        }
-
-        return Ok(new
-        {
-            success = true,
-            message = "Sesion cerrada correctamente."
-        });
+        return ToActionResult(result);
     }
 
-    private AuthResponseDto BuildAuthResponse(User user, string refreshToken)
+    private AuthRequestContext BuildRequestContext()
     {
-        var accessToken = _tokenService.CreateToken(user);
+        return new AuthRequestContext(
+            Scheme: Request.Scheme,
+            Host: Request.Host.Value,
+            IpAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            UserAgent: HttpContext.Request.Headers.UserAgent.ToString()
+        );
+    }
 
-        return new AuthResponseDto
+    private IActionResult ToActionResult<T>(AppServiceResult<T> result) where T : class
+    {
+        if (result.IsSuccess)
         {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken,
-            User = new UserResponseDto
-            {
-                Id = user.Id,
-                Email = user.Email,
-                Name = user.Name,
-                Role = user.Role,
-                AvatarUrl = BuildAvatarUrl(user.AvatarPath),
-                IsActive = user.IsActive
-            }
+            return Ok(result.Data);
+        }
+
+        var error = result.Error!;
+
+        return error.Type switch
+        {
+            AppServiceErrorType.BadRequest =>
+                BadRequestError(error.Message, error.Code),
+            AppServiceErrorType.Unauthorized =>
+                UnauthorizedError(error.Message, error.Code),
+            AppServiceErrorType.Conflict =>
+                ConflictError(error.Message, error.Code),
+            AppServiceErrorType.Forbidden =>
+                ForbiddenError(error.Message, error.Code),
+            AppServiceErrorType.NotFound =>
+                NotFoundError(error.Message, error.Code),
+            _ => BadRequestError(error.Message, error.Code)
         };
-    }
-
-    private static bool IsUniqueEmailViolation(DbUpdateException ex)
-    {
-        return ex.InnerException is SqlException sqlException &&
-               (sqlException.Number == 2601 || sqlException.Number == 2627);
-    }
-
-    private static string BuildPasswordPolicyMessage(
-        IReadOnlyCollection<string> errors
-    )
-    {
-        return errors.Count == 0
-            ? "La contrasena no cumple la politica de seguridad."
-            : string.Join(" ", errors);
-    }
-
-    private async Task WriteAuthAuditAsync(
-        string eventType,
-        bool isSuccess,
-        Guid? userId = null,
-        string? email = null,
-        string? failureReason = null
-    )
-    {
-        try
-        {
-            var userAgent = HttpContext.Request.Headers.UserAgent.ToString();
-
-            _context.AuthAuditLogs.Add(new AuthAuditLog
-            {
-                EventType = eventType,
-                IsSuccess = isSuccess,
-                UserId = userId,
-                Email = NormalizeEmail(email),
-                FailureReason = TrimToMaxLength(failureReason, 200),
-                IpAddress = TrimToMaxLength(HttpContext.Connection.RemoteIpAddress?.ToString(), 45),
-                UserAgent = TrimToMaxLength(userAgent, 512),
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "No se pudo guardar el registro de auditoria. EventType: {EventType}",
-                eventType
-            );
-        }
-    }
-
-    private static string? NormalizeEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            return null;
-        }
-
-        return TrimToMaxLength(email.Trim().ToLowerInvariant(), 256);
-    }
-
-    private static string? TrimToMaxLength(string? value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Length <= maxLength ? value : value[..maxLength];
-    }
-
-    private string? BuildAvatarUrl(string? avatarPath)
-    {
-        if (string.IsNullOrWhiteSpace(avatarPath))
-        {
-            return null;
-        }
-
-        var normalizedPath = avatarPath.Replace('\\', '/').TrimStart('/');
-        return $"{Request.Scheme}://{Request.Host}/uploads/{normalizedPath}";
     }
 }
